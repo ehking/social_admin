@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -13,12 +14,10 @@ import arabic_reshaper
 import requests
 from bidi.algorithm import get_display
 from deep_translator import GoogleTranslator
-from moviepy.editor import (
-    AudioFileClip,
-    ColorClip,
-    CompositeVideoClip,
-    TextClip,
-)
+from moviepy.editor import AudioFileClip, ColorClip, CompositeVideoClip, TextClip
+
+from app.logging_utils import JobContext, job_context
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -91,7 +90,6 @@ class TrendingVideoCreator:
         """Download the audio preview for a track."""
 
         destination.parent.mkdir(parents=True, exist_ok=True)
-        LOGGER.info("Downloading preview for \"%s\"", track.display_name)
         with requests.get(track.preview_url, timeout=10, stream=True) as response:
             response.raise_for_status()
             with destination.open("wb") as handle:
@@ -131,7 +129,13 @@ class TrendingVideoCreator:
             .set_position("center")
         )
 
-    def assemble_video(self, audio_path: Path, text: str, *, output_path: Path) -> Path:
+    def assemble_video(
+        self,
+        audio_path: Path,
+        text: str,
+        *,
+        output_path: Path,
+    ) -> Path:
         """Create a simple vertical video with the provided audio and caption."""
 
         audio_clip = AudioFileClip(str(audio_path))
@@ -146,7 +150,6 @@ class TrendingVideoCreator:
         video = CompositeVideoClip([background, caption]).set_audio(audio_clip)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        LOGGER.info("Rendering video to %s", output_path)
         video.write_videofile(  # type: ignore[no-untyped-call]
             str(output_path),
             fps=30,
@@ -167,18 +170,93 @@ class TrendingVideoCreator:
         caption_template: str,
         output_path: Path,
         translate: bool = True,
+        job_ctx: JobContext | None = None,
+        media_id: str | int | None = None,
+        campaign_id: str | int | None = None,
+        log_dir: Path | str | None = None,
     ) -> Path:
         """Generate a captioned video for the provided track."""
 
+        caption_value = caption_template.format(track=track.display_name)
         if translate:
-            caption_text = self.translate_to_persian(caption_template.format(track=track.display_name))
+            caption_text = self.translate_to_persian(caption_value)
         else:
-            caption_text = self._normalize_persian_text(caption_template.format(track=track.display_name))
+            caption_text = self._normalize_persian_text(caption_value)
 
-        with tempfile.TemporaryDirectory() as temp_dir:
+        context_manager = (
+            nullcontext(job_ctx)
+            if job_ctx is not None
+            else job_context(media_id=media_id, campaign_id=campaign_id, log_dir=log_dir)
+        )
+
+        with context_manager as active_ctx, tempfile.TemporaryDirectory() as temp_dir:
+            logger = active_ctx.logger
             audio_path = Path(temp_dir) / "preview.m4a"
-            self.download_preview(track, destination=audio_path)
-            return self.assemble_video(audio_path=audio_path, text=caption_text, output_path=output_path)
+
+            logger.info(
+                "download_started",
+                extra={
+                    "preview_url": track.preview_url,
+                    "track_title": track.title,
+                    "track_artist": track.artist,
+                },
+            )
+            try:
+                self.download_preview(track, destination=audio_path)
+            except Exception:
+                logger.exception(
+                    "download_failed",
+                    extra={"preview_url": track.preview_url},
+                )
+                raise
+            logger.info(
+                "download_completed",
+                extra={"audio_path": str(audio_path)},
+            )
+
+            logger.info(
+                "render_started",
+                extra={
+                    "output_path": str(output_path),
+                    "caption_text": caption_text,
+                },
+            )
+            try:
+                video_path = self.assemble_video(
+                    audio_path=audio_path,
+                    text=caption_text,
+                    output_path=output_path,
+                )
+            except Exception:
+                logger.exception(
+                    "render_failed",
+                    extra={"output_path": str(output_path)},
+                )
+                raise
+            logger.info(
+                "render_completed",
+                extra={"video_path": str(video_path)},
+            )
+
+            logger.info(
+                "upload_started",
+                extra={"destination": str(output_path)},
+            )
+            try:
+                if not output_path.exists():
+                    raise FileNotFoundError(f"Rendered video not found at {output_path}")
+            except Exception:
+                logger.exception(
+                    "upload_failed",
+                    extra={"destination": str(output_path)},
+                )
+                raise
+            logger.info(
+                "upload_completed",
+                extra={"destination": str(output_path)},
+            )
+
+            return video_path
 
     # ------------------------------------------------------------------
     # Serialization helpers for inspection or caching

@@ -1,7 +1,9 @@
+import logging
 from datetime import datetime
+from time import perf_counter
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, Request, Response
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -10,14 +12,42 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from fastapi.responses import JSONResponse
 
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+
 from . import auth, models
 from .ai_workflow import get_ai_video_workflow
 from .database import Base, SessionLocal, engine, get_db
+from .monitoring import configure_monitoring
 
 app = FastAPI(title="Social Admin")
 app.add_middleware(SessionMiddleware, secret_key="super-secret-session-key")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+
+configure_monitoring(app)
+
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    start_time = perf_counter()
+    response: Response = await call_next(request)
+    elapsed = perf_counter() - start_time
+    path = request.url.path
+    method = request.method
+    status = response.status_code
+
+    REQUEST_COUNT.labels(method=method, path=path, status=status).inc()
+    REQUEST_LATENCY.labels(method=method, path=path).observe(elapsed)
+    logger.debug(
+        "Processed request",
+        extra={
+            "method": method,
+            "path": path,
+            "status": status,
+            "duration": elapsed,
+        },
+    )
+    return response
 
 
 @app.on_event("startup")
@@ -26,6 +56,7 @@ def on_startup() -> None:
     db = SessionLocal()
     try:
         auth.ensure_default_admin(db)
+        logger.info("Startup complete and default admin ensured.")
     finally:
         db.close()
 
@@ -34,6 +65,7 @@ def on_startup() -> None:
 async def login_form(request: Request):
     user = request.session.get("user_id")
     if user:
+        logger.debug("Authenticated user attempted to access login form", extra={"user_id": user})
         return RedirectResponse(url="/", status_code=302)
     return templates.TemplateResponse("login.html", {"request": request})
 
@@ -46,6 +78,10 @@ async def login(request: Request, db: Session = Depends(get_db)):
 
     user = db.query(models.AdminUser).filter_by(username=username).first()
     if not user or not auth.verify_password(password, user.password_hash):
+        logger.warning(
+            "Failed login attempt",
+            extra={"username": username, "ip": request.client.host if request.client else None},
+        )
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": "نام کاربری یا رمز عبور نادرست است."},
@@ -53,12 +89,19 @@ async def login(request: Request, db: Session = Depends(get_db)):
         )
 
     request.session["user_id"] = user.id
+    logger.info(
+        "User logged in",
+        extra={"user_id": user.id, "username": username, "ip": request.client.host if request.client else None},
+    )
     return RedirectResponse(url="/", status_code=302)
 
 
 @app.post("/logout")
 async def logout(request: Request):
+    user_id = request.session.get("user_id")
     request.session.clear()
+    if user_id:
+        logger.info("User logged out", extra={"user_id": user_id})
     return RedirectResponse(url="/login", status_code=302)
 
 
@@ -90,6 +133,13 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/metrics")
+async def metrics() -> Response:
+    """Expose Prometheus metrics for scraping."""
+
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.get("/settings")
 async def settings(request: Request, db: Session = Depends(get_db)):
     user = auth.get_logged_in_user(
@@ -116,6 +166,7 @@ async def settings(request: Request, db: Session = Depends(get_db)):
 async def ai_video_workflow() -> JSONResponse:
     """Return a curated list of AI video tools and workflow steps."""
 
+    logger.debug("AI video workflow requested")
     return JSONResponse(get_ai_video_workflow())
 
 
@@ -139,9 +190,17 @@ async def create_or_update_token(
     if token:
         token.name = name
         token.value = value
+        logger.info(
+            "Service token updated",
+            extra={"user_id": user.id, "token_id": token.id, "key": key},
+        )
     else:
         token = models.ServiceToken(name=name, key=key, value=value)
         db.add(token)
+        logger.info(
+            "Service token created",
+            extra={"user_id": user.id, "key": key},
+        )
     db.commit()
     return RedirectResponse(url="/settings", status_code=302)
 
@@ -160,6 +219,10 @@ async def delete_token(request: Request, token_id: int = Form(...), db: Session 
     if token:
         db.delete(token)
         db.commit()
+        logger.info(
+            "Service token deleted",
+            extra={"user_id": user.id, "token_id": token_id},
+        )
     return RedirectResponse(url="/settings", status_code=302)
 
 
@@ -238,10 +301,18 @@ async def save_account(
     if account_id:
         account = db.get(models.SocialAccount, int(account_id))
         if not account:
+            logger.warning(
+                "Attempted to update non-existent account",
+                extra={"user_id": user.id, "account_id": account_id},
+            )
             return RedirectResponse(url="/accounts", status_code=302)
     else:
         account = models.SocialAccount(platform=platform, display_name=display_name)
         db.add(account)
+        logger.info(
+            "Creating new account",
+            extra={"user_id": user.id, "platform": platform},
+        )
 
     def _clean(value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -257,6 +328,10 @@ async def save_account(
     account.telegram_chat_id = _clean(telegram_chat_id)
 
     db.commit()
+    logger.info(
+        "Account saved",
+        extra={"user_id": user.id, "account_id": account.id, "platform": account.platform},
+    )
     return RedirectResponse(url="/accounts", status_code=302)
 
 
@@ -270,6 +345,10 @@ async def delete_account(request: Request, account_id: int = Form(...), db: Sess
     if account:
         db.delete(account)
         db.commit()
+        logger.info(
+            "Account deleted",
+            extra={"user_id": user.id, "account_id": account_id, "platform": account.platform},
+        )
     return RedirectResponse(url="/accounts", status_code=302)
 
 
@@ -319,6 +398,10 @@ async def create_schedule(
             .order_by(models.ScheduledPost.scheduled_time.desc())
             .all()
         )
+        logger.warning(
+            "Invalid schedule timestamp provided",
+            extra={"user_id": user.id, "account_id": account_id, "value": scheduled_time},
+        )
         return templates.TemplateResponse(
             "scheduler.html",
             {
@@ -348,6 +431,15 @@ async def create_schedule(
     )
     db.add(post)
     db.commit()
+    logger.info(
+        "Post scheduled",
+        extra={
+            "user_id": user.id,
+            "account_id": account_id,
+            "post_id": post.id,
+            "scheduled_time": schedule_dt.isoformat(),
+        },
+    )
     return RedirectResponse(url="/scheduler", status_code=302)
 
 
@@ -361,4 +453,8 @@ async def delete_schedule(request: Request, post_id: int = Form(...), db: Sessio
     if post:
         db.delete(post)
         db.commit()
+        logger.info(
+            "Scheduled post deleted",
+            extra={"user_id": user.id, "post_id": post_id, "account_id": post.account_id},
+        )
     return RedirectResponse(url="/scheduler", status_code=302)

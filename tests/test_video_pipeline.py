@@ -1,0 +1,102 @@
+import pathlib
+import sys
+from types import SimpleNamespace
+
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+
+from app.services import trending_video
+from app.services.trending_video import TrendingVideoCreator
+
+
+DUMMY_DURATION = 4.25
+
+
+class DummyAudioClip:
+    def __init__(self, path: str):
+        self.path = path
+        self.duration = DUMMY_DURATION
+
+
+class DummyColorClip:
+    def __init__(self, *, size, color):
+        self.size = size
+        self.color = color
+        self.duration = None
+
+    def set_duration(self, duration):
+        self.duration = duration
+        return self
+
+
+class DummyCompositeVideoClip:
+    def __init__(self, clips):
+        self.clips = clips
+        self.audio = None
+        self.write_args = None
+
+    def set_audio(self, audio):
+        self.audio = audio
+        return self
+
+    def write_videofile(self, filename, **kwargs):
+        pathlib.Path(filename).write_bytes(b"video")
+        self.write_args = {"filename": filename, **kwargs}
+
+
+def test_assemble_video_produces_file_and_metadata(monkeypatch, tmp_path):
+    font_path = tmp_path / "dummy-font.ttf"
+    font_path.write_text("fake font")
+    audio_path = tmp_path / "preview.m4a"
+    audio_path.write_bytes(b"audio")
+    output_path = tmp_path / "output.mp4"
+
+    created_backgrounds = []
+    composite_clips = []
+    captured_caption = {}
+
+    monkeypatch.setattr(trending_video, "AudioFileClip", DummyAudioClip)
+
+    def fake_color_clip(size, color):
+        clip = DummyColorClip(size=size, color=color)
+        created_backgrounds.append(clip)
+        return clip
+
+    monkeypatch.setattr(trending_video, "ColorClip", fake_color_clip)
+
+    def fake_composite(clips):
+        clip = DummyCompositeVideoClip(clips)
+        composite_clips.append(clip)
+        return clip
+
+    monkeypatch.setattr(trending_video, "CompositeVideoClip", fake_composite)
+
+    def fake_build_caption(self, text, duration):
+        captured_caption["text"] = text
+        captured_caption["duration"] = duration
+        return SimpleNamespace()
+
+    monkeypatch.setattr(TrendingVideoCreator, "build_caption_clip", fake_build_caption)
+
+    creator = TrendingVideoCreator(font_path=font_path, width=720, height=1280, background_color=(1, 2, 3))
+
+    result = creator.assemble_video(audio_path=audio_path, text="نمونه کپشن", output_path=output_path)
+
+    assert result == output_path
+    assert output_path.exists()
+
+    assert captured_caption == {"text": "نمونه کپشن", "duration": DUMMY_DURATION}
+
+    assert created_backgrounds and created_backgrounds[0].size == (720, 1280)
+    assert created_backgrounds[0].color == (1, 2, 3)
+    assert created_backgrounds[0].duration == DUMMY_DURATION
+
+    assert composite_clips, "CompositeVideoClip should be constructed"
+    composite = composite_clips[0]
+    assert composite.audio.path == str(audio_path)
+    assert composite.write_args is not None
+    assert composite.write_args["filename"] == str(output_path)
+    assert composite.write_args["fps"] == 30
+    assert composite.write_args["codec"] == "libx264"
+    assert composite.write_args["audio_codec"] == "aac"
+    assert composite.write_args["remove_temp"] is True
+    assert composite.write_args["temp_audiofile"].endswith(".temp-audio.m4a")

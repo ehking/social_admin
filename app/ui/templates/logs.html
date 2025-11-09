@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}بررسی لاگ‌ها{% endblock %}
+
+{% block page_header %}
+    <h1 class="m-0 text-dark">بررسی لاگ‌ها</h1>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card card-outline card-primary">
+            <div class="card-header">
+                <h3 class="card-title">آخرین رویدادهای ثبت‌شده</h3>
+            </div>
+            <div class="card-body">
+                {% if log_files %}
+                    <div class="accordion" id="logsAccordion">
+                        {% for log in log_files %}
+                            <div class="card card-outline card-secondary mb-2">
+                                <div class="card-header" id="heading{{ loop.index }}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <button class="btn btn-link text-dark p-0" type="button" data-toggle="collapse" data-target="#collapse{{ loop.index }}" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="collapse{{ loop.index }}">
+                                            <i class="far fa-file-alt ml-2"></i>
+                                            {{ log.name }}
+                                        </button>
+                                        {% if log.modified_display %}
+                                            <span class="text-muted small"><i class="far fa-clock ml-1"></i>{{ log.modified_display }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div id="collapse{{ loop.index }}" class="collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading{{ loop.index }}" data-parent="#logsAccordion">
+                                    <div class="card-body bg-light">
+                                        {% if log.entries %}
+                                            <ul class="list-unstyled log-entry-list mb-0">
+                                                {% for entry in log.entries %}
+                                                    <li class="mb-3 border rounded bg-white p-3">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <span class="badge badge-{{ entry.badge_class }}">{{ entry.level }}</span>
+                                                            {% if entry.timestamp %}
+                                                                <span class="text-muted small"><i class="far fa-clock ml-1"></i>{{ entry.timestamp }}</span>
+                                                            {% endif %}
+                                                        </div>
+                                                        {% if entry.message %}
+                                                            <div class="font-weight-bold mt-2">{{ entry.message }}</div>
+                                                        {% endif %}
+                                                        {% if entry.details %}
+                                                            <pre class="small mt-2 mb-0">{{ entry.details }}</pre>
+                                                        {% endif %}
+                                                    </li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <p class="text-muted mb-0">ورودی‌ای برای این فایل لاگ پیدا نشد.</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">هنوز لاگی برای نمایش وجود ندارد. پس از اجرای وظایف و پردازش‌ها، لاگ‌ها به‌صورت خودکار در این بخش ظاهر می‌شوند.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

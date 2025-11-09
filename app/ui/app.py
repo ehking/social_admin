@@ -94,15 +94,18 @@ def create_app() -> FastAPI:
     scheduler_presenter = SchedulerPresenter(templates)
     documentation_presenter = DocumentationPresenter(templates)
     ai_presenter = AIVideoWorkflowPresenter()
+    documentation_presenter = DocumentationPresenter(templates)
 
     app.include_router(auth_views.create_router(auth_presenter))
     app.include_router(dashboard.create_router(dashboard_presenter))
     app.include_router(settings.create_router(settings_presenter))
     app.include_router(accounts.create_router(accounts_presenter))
     app.include_router(scheduler.create_router(scheduler_presenter))
+    app.include_router(manual_video.create_router(manual_video_presenter))
     app.include_router(ai.create_router(ai_presenter))
     app.include_router(documentation.create_router(documentation_presenter))
     app.include_router(metrics.create_router())
+    app.include_router(logs.create_router(logs_presenter))
 
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):

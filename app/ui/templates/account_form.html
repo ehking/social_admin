@@ -1,61 +1,41 @@
 {% extends "base.html" %}
-{% block title %}{% if account %}ویرایش اکانت{% else %}افزودن اکانت{% endif %}{% endblock %}
-
+{% block title %}فرم حساب | Social Admin{% endblock %}
+{% block page_title %}{% if account %}ویرایش حساب{% else %}افزودن حساب جدید{% endif %}{% endblock %}
+{% block page_subtitle %}اطلاعات اتصال به شبکه اجتماعی را کامل کنید{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="card card-outline card-primary">
-            <div class="card-header border-0">
-                <h3 class="card-title">{% if account %}ویرایش اکانت {{ account.display_name }}{% else %}افزودن اکانت جدید{% endif %}</h3>
-            </div>
-            <div class="card-body">
-                <form method="post" action="/accounts">
-                    {% if account %}
-                        <input type="hidden" name="account_id" value="{{ account.id }}">
-                    {% endif %}
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label for="display_name">نام نمایشی</label>
-                            <input type="text" class="form-control" id="display_name" name="display_name" value="{{ account.display_name if account else '' }}" required>
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label for="platform">پلتفرم</label>
-                            {% set selected = account.platform if account else '' %}
-                            <select class="custom-select" id="platform" name="platform" required>
-                                <option value="">انتخاب کنید</option>
-                                <option value="instagram" {% if selected == 'instagram' %}selected{% endif %}>اینستاگرام</option>
-                                <option value="youtube" {% if selected == 'youtube' %}selected{% endif %}>یوتیوب</option>
-                                <option value="telegram" {% if selected == 'telegram' %}selected{% endif %}>تلگرام</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label for="page_id">Page ID / شناسه صفحه</label>
-                            <input type="text" class="form-control" id="page_id" name="page_id" value="{{ account.page_id if account else '' }}">
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label for="oauth_token">توکن OAuth / Graph</label>
-                            <input type="text" class="form-control" id="oauth_token" name="oauth_token" value="{{ account.oauth_token if account else '' }}">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label for="youtube_channel_id">شناسه کانال یوتیوب</label>
-                            <input type="text" class="form-control" id="youtube_channel_id" name="youtube_channel_id" value="{{ account.youtube_channel_id if account else '' }}">
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label for="telegram_chat_id">شناسه چت تلگرام</label>
-                            <input type="text" class="form-control" id="telegram_chat_id" name="telegram_chat_id" value="{{ account.telegram_chat_id if account else '' }}">
-                        </div>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <a class="btn btn-link" href="/accounts">بازگشت</a>
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-save ml-1"></i> ذخیره اطلاعات</button>
-                    </div>
-                </form>
-            </div>
+<section class="panel">
+    <form method="post" action="/accounts" class="form-grid">
+        {% if account %}
+            <input type="hidden" name="account_id" value="{{ account.id }}">
+        {% endif %}
+        <div class="form-field">
+            <label for="platform">پلتفرم</label>
+            <input type="text" id="platform" name="platform" value="{{ account.platform if account else '' }}" required>
         </div>
-    </div>
-</div>
+        <div class="form-field">
+            <label for="display_name">نام نمایشی</label>
+            <input type="text" id="display_name" name="display_name" value="{{ account.display_name if account else '' }}" required>
+        </div>
+        <div class="form-field">
+            <label for="page_id">شناسه صفحه / کانال</label>
+            <input type="text" id="page_id" name="page_id" value="{{ account.page_id if account else '' }}">
+        </div>
+        <div class="form-field">
+            <label for="oauth_token">توکن OAuth</label>
+            <textarea id="oauth_token" name="oauth_token" rows="3">{{ account.oauth_token if account else '' }}</textarea>
+        </div>
+        <div class="form-field">
+            <label for="youtube_channel_id">شناسه کانال یوتیوب</label>
+            <input type="text" id="youtube_channel_id" name="youtube_channel_id" value="{{ account.youtube_channel_id if account else '' }}">
+        </div>
+        <div class="form-field">
+            <label for="telegram_chat_id">شناسه گفت‌وگو در تلگرام</label>
+            <input type="text" id="telegram_chat_id" name="telegram_chat_id" value="{{ account.telegram_chat_id if account else '' }}">
+        </div>
+        <div class="form-actions">
+            <a class="btn btn-secondary" href="/accounts">انصراف</a>
+            <button type="submit" class="btn">ذخیره حساب</button>
+        </div>
+    </form>
+</section>
 {% endblock %}

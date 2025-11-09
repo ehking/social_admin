@@ -1,111 +1,77 @@
 {% extends "base.html" %}
-
-{% block title %}ساخت دستی ویدیو{% endblock %}
-
-{% block page_header %}
-<h1 class="m-0 text-dark">ساخت دستی ویدیو</h1>
-<p class="text-muted">ایجاد یک پروژه ویدیویی جدید با وارد کردن اطلاعات خروجی و کمپین.</p>
-{% endblock %}
-
+{% block title %}ویدیو دستی | Social Admin{% endblock %}
+{% block page_title %}ایجاد ویدیو به صورت دستی{% endblock %}
+{% block page_subtitle %}یک کمپین جدید ایجاد کنید و ویدیو را برای پردازش ثبت نمایید{% endblock %}
 {% block content %}
-<div class="row">
-    <div class="col-lg-6">
-        <div class="card card-primary">
-            <div class="card-header">
-                <h3 class="card-title">فرم ایجاد ویدیو</h3>
-            </div>
-            <form method="post" action="/manual-video">
-                <div class="card-body">
-                    {% if error %}
-                        <div class="alert alert-danger" role="alert">
-                            {{ error }}
-                        </div>
-                    {% endif %}
-                    <div class="form-group">
-                        <label for="title">عنوان ویدیو</label>
-                        <input type="text" class="form-control" id="title" name="title" placeholder="مثال: معرفی محصول جدید" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="description">توضیحات یا یادداشت تدوین</label>
-                        <textarea class="form-control" id="description" name="description" rows="3" placeholder="شرح سناریو، نکات مهم یا جزئیات ویرایش"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="media_url">لینک ویدیو نهایی</label>
-                        <input type="url" class="form-control" id="media_url" name="media_url" placeholder="https://..." required>
-                        <small class="form-text text-muted">لینک مستقیم به فایل یا ویدیو ذخیره‌شده در فضای ابری.</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="media_type">نوع فایل</label>
-                        <input type="text" class="form-control" id="media_type" name="media_type" placeholder="video/mp4">
-                    </div>
-                    <hr>
-                    <div class="form-group">
-                        <label for="campaign_name">نام کمپین</label>
-                        <input type="text" class="form-control" id="campaign_name" name="campaign_name" placeholder="کمپین تبلیغاتی تابستان" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="campaign_description">توضیحات کمپین</label>
-                        <textarea class="form-control" id="campaign_description" name="campaign_description" rows="2" placeholder="هدف کمپین، کانال‌های انتشار و ..."></textarea>
-                    </div>
-                </div>
-                <div class="card-footer text-right">
-                    <button type="submit" class="btn btn-primary">ذخیره ویدیو</button>
-                </div>
-            </form>
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>اطلاعات ویدیو</h2>
+            <p class="panel-description">جزئیات ویدیو و کمپین را تکمیل کنید</p>
         </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card card-outline card-secondary">
-            <div class="card-header">
-                <h3 class="card-title">ویدیوهای ثبت شده</h3>
-            </div>
-            <div class="card-body p-0">
-                {% if jobs %}
-                    <div class="table-responsive">
-                        <table class="table table-striped mb-0">
-                            <thead>
-                                <tr>
-                                    <th>عنوان</th>
-                                    <th>کمپین</th>
-                                    <th>تاریخ ایجاد</th>
-                                    <th>لینک ویدیو</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for job in jobs %}
-                                    <tr>
-                                        <td>
-                                            <strong>{{ job.title }}</strong><br>
-                                            <small class="text-muted">{{ job.description or "بدون توضیحات" }}</small>
-                                        </td>
-                                        <td>
-                                            {% if job.campaign %}
-                                                <span class="badge badge-info">{{ job.campaign.name }}</span><br>
-                                                <small class="text-muted">{{ job.campaign.description or "" }}</small>
-                                            {% else %}
-                                                <span class="text-muted">بدون کمپین</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '-' }}</td>
-                                        <td>
-                                            {% if job.media %}
-                                                <a href="{{ job.media[0].media_url or job.media[0].storage_url }}" target="_blank" rel="noopener">مشاهده</a>
-                                            {% else %}
-                                                <span class="text-muted">فاقد ویدیو</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="p-4 text-center text-muted">
-                        تاکنون ویدیویی ثبت نشده است.
-                    </div>
-                {% endif %}
-            </div>
+    </header>
+    <form method="post" action="/manual-video" class="form-grid">
+        <div class="form-field">
+            <label for="title">عنوان ویدیو</label>
+            <input type="text" id="title" name="title" required>
         </div>
-    </div>
-</div>
+        <div class="form-field">
+            <label for="media_url">لینک فایل ویدیو</label>
+            <input type="url" id="media_url" name="media_url" placeholder="https://..." required>
+        </div>
+        <div class="form-field">
+            <label for="media_type">نوع رسانه</label>
+            <input type="text" id="media_type" name="media_type" value="video/mp4">
+        </div>
+        <div class="form-field full">
+            <label for="description">توضیحات ویدیو</label>
+            <textarea id="description" name="description" rows="3" placeholder="توضیحات اختیاری"></textarea>
+        </div>
+        <div class="form-field">
+            <label for="campaign_name">نام کمپین</label>
+            <input type="text" id="campaign_name" name="campaign_name" required>
+        </div>
+        <div class="form-field full">
+            <label for="campaign_description">توضیحات کمپین</label>
+            <textarea id="campaign_description" name="campaign_description" rows="3"></textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn">ثبت ویدیو</button>
+        </div>
+    </form>
+</section>
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>آخرین درخواست‌ها</h2>
+            <p class="panel-description">نظارت بر وضعیت پردازش ویدیوهای ثبت‌شده</p>
+        </div>
+    </header>
+    {% if jobs %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>عنوان</th>
+                        <th>کمپین</th>
+                        <th>وضعیت</th>
+                        <th>تاریخ ایجاد</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                        <tr>
+                            <td>{{ job.title }}</td>
+                            <td>{{ job.campaign.name if job.campaign else '-' }}</td>
+                            <td><span class="badge badge-soft">{{ job.status or 'pending' }}</span></td>
+                            <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="empty">درخواستی برای نمایش وجود ندارد.</p>
+    {% endif %}
+</section>
 {% endblock %}

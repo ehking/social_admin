@@ -1,15 +1,17 @@
 {% extends "base.html" %}
-
-{% block title %}مستندات پروژه{% endblock %}
-
-{% block page_header %}
-    <h1 class="m-0 text-dark"><i class="fas fa-book-open"></i> مستندات پروژه</h1>
-{% endblock %}
-
+{% block title %}مستندات | Social Admin{% endblock %}
+{% block page_title %}مستندات پروژه{% endblock %}
+{% block page_subtitle %}شرح قابلیت‌ها و قراردادهای فنی سیستم{% endblock %}
 {% block content %}
-<div class="card">
-    <div class="card-body documentation-card">
-        <pre class="documentation-content">{{ spec_text | e }}</pre>
-    </div>
-</div>
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>فایل مستندات</h2>
+            <p class="panel-description">محتوای فایل <code>project_spec.md</code> نمایش داده می‌شود</p>
+        </div>
+    </header>
+    <article class="documentation documentation-content">
+        <pre>{{ spec_text }}</pre>
+    </article>
+</section>
 {% endblock %}

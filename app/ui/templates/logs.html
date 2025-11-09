@@ -1,68 +1,56 @@
 {% extends "base.html" %}
-
-{% block title %}بررسی لاگ‌ها{% endblock %}
-
-{% block page_header %}
-    <h1 class="m-0 text-dark">بررسی لاگ‌ها</h1>
-{% endblock %}
-
+{% block title %}لاگ‌ها | Social Admin{% endblock %}
+{% block page_title %}گزارش اجرای پردازه‌ها{% endblock %}
+{% block page_subtitle %}آخرین رویدادها و خطاهای سیستم را مرور کنید{% endblock %}
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="card card-outline card-primary">
-            <div class="card-header">
-                <h3 class="card-title">آخرین رویدادهای ثبت‌شده</h3>
-            </div>
-            <div class="card-body">
-                {% if log_files %}
-                    <div class="accordion" id="logsAccordion">
-                        {% for log in log_files %}
-                            <div class="card card-outline card-secondary mb-2">
-                                <div class="card-header" id="heading{{ loop.index }}">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <button class="btn btn-link text-dark p-0" type="button" data-toggle="collapse" data-target="#collapse{{ loop.index }}" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="collapse{{ loop.index }}">
-                                            <i class="far fa-file-alt ml-2"></i>
-                                            {{ log.name }}
-                                        </button>
-                                        {% if log.modified_display %}
-                                            <span class="text-muted small"><i class="far fa-clock ml-1"></i>{{ log.modified_display }}</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div id="collapse{{ loop.index }}" class="collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading{{ loop.index }}" data-parent="#logsAccordion">
-                                    <div class="card-body bg-light">
-                                        {% if log.entries %}
-                                            <ul class="list-unstyled log-entry-list mb-0">
-                                                {% for entry in log.entries %}
-                                                    <li class="mb-3 border rounded bg-white p-3">
-                                                        <div class="d-flex justify-content-between align-items-center">
-                                                            <span class="badge badge-{{ entry.badge_class }}">{{ entry.level }}</span>
-                                                            {% if entry.timestamp %}
-                                                                <span class="text-muted small"><i class="far fa-clock ml-1"></i>{{ entry.timestamp }}</span>
-                                                            {% endif %}
-                                                        </div>
-                                                        {% if entry.message %}
-                                                            <div class="font-weight-bold mt-2">{{ entry.message }}</div>
-                                                        {% endif %}
-                                                        {% if entry.details %}
-                                                            <pre class="small mt-2 mb-0">{{ entry.details }}</pre>
-                                                        {% endif %}
-                                                    </li>
-                                                {% endfor %}
-                                            </ul>
-                                        {% else %}
-                                            <p class="text-muted mb-0">ورودی‌ای برای این فایل لاگ پیدا نشد.</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="text-muted mb-0">هنوز لاگی برای نمایش وجود ندارد. پس از اجرای وظایف و پردازش‌ها، لاگ‌ها به‌صورت خودکار در این بخش ظاهر می‌شوند.</p>
-                {% endif %}
-            </div>
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>فایل‌های لاگ</h2>
+            <p class="panel-description">حداکثر ده فایل اخیر نمایش داده می‌شود</p>
         </div>
-    </div>
-</div>
+    </header>
+    {% if log_files %}
+        <div class="logs">
+            {% for log in log_files %}
+                <details class="log-entry" {% if loop.first %}open{% endif %}>
+                    <summary>
+                        <span class="log-name">{{ log.name }}</span>
+                        <span class="log-date">آخرین تغییر: {{ log.modified_display }}</span>
+                    </summary>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>سطح</th>
+                                    <th>زمان</th>
+                                    <th>پیام</th>
+                                    <th>جزئیات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in log.entries %}
+                                    <tr>
+                                        <td><span class="badge badge-{{ entry.badge_class }}">{{ entry.level }}</span></td>
+                                        <td>{{ entry.timestamp }}</td>
+                                        <td>{{ entry.message }}</td>
+                                        <td>
+                                            {% if entry.details %}
+                                                <pre class="log-details">{{ entry.details }}</pre>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty">لاگی برای نمایش وجود ندارد.</p>
+    {% endif %}
+</section>
 {% endblock %}

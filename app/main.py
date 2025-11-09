@@ -8,7 +8,10 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
+from fastapi.responses import JSONResponse
+
 from . import auth, models
+from .ai_workflow import get_ai_video_workflow
 from .database import Base, SessionLocal, engine, get_db
 
 app = FastAPI(title="Social Admin")
@@ -97,6 +100,13 @@ async def settings(request: Request, db: Session = Depends(get_db)):
         "settings.html",
         {"request": request, "user": user, "tokens": tokens},
     )
+
+
+@app.get("/ai/video-workflow", response_class=JSONResponse)
+async def ai_video_workflow() -> JSONResponse:
+    """Return a curated list of AI video tools and workflow steps."""
+
+    return JSONResponse(get_ai_video_workflow())
 
 
 @app.post("/settings")

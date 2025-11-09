@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}مدیریت اکانت‌ها{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h4 mb-0">اکانت‌های متصل</h1>
+    <a class="btn btn-primary" href="/accounts/new">افزودن اکانت</a>
+</div>
+<div class="card p-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+            <tr>
+                <th>نام نمایشی</th>
+                <th>پلتفرم</th>
+                <th>شناسه‌ها</th>
+                <th>مدیریت</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for account in accounts %}
+                <tr>
+                    <td>{{ account.display_name }}</td>
+                    <td><span class="badge bg-info text-dark">{{ account.platform }}</span></td>
+                    <td>
+                        {% if account.page_id %}<div><small class="text-muted">Page ID: {{ account.page_id }}</small></div>{% endif %}
+                        {% if account.youtube_channel_id %}<div><small class="text-muted">کانال: {{ account.youtube_channel_id }}</small></div>{% endif %}
+                        {% if account.telegram_chat_id %}<div><small class="text-muted">چت: {{ account.telegram_chat_id }}</small></div>{% endif %}
+                    </td>
+                    <td class="text-nowrap">
+                        <a class="btn btn-sm btn-outline-secondary" href="/accounts/{{ account.id }}">ویرایش</a>
+                        <form class="d-inline" method="post" action="/accounts/delete" onsubmit="return confirm('این اکانت حذف شود؟');">
+                            <input type="hidden" name="account_id" value="{{ account.id }}">
+                            <button class="btn btn-sm btn-outline-danger" type="submit">حذف</button>
+                        </form>
+                    </td>
+                </tr>
+            {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">اکانتی ثبت نشده است.</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

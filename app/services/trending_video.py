@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Any, Callable, Iterable, List, Optional
 
 import arabic_reshaper
 import requests
@@ -19,6 +20,8 @@ from moviepy.editor import (
     CompositeVideoClip,
     TextClip,
 )
+
+from app.config import get_settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +37,97 @@ class TrendingTrack:
     @property
     def display_name(self) -> str:
         return f"{self.title} — {self.artist}" if self.artist else self.title
+
+
+def _is_retriable_error(error: requests.exceptions.RequestException) -> bool:
+    """Determine whether the raised error is safe to retry."""
+
+    non_retriable = (
+        requests.exceptions.InvalidURL,
+        requests.exceptions.InvalidSchema,
+        requests.exceptions.MissingSchema,
+        requests.exceptions.URLRequired,
+    )
+    if isinstance(error, non_retriable):
+        return False
+
+    if isinstance(error, requests.exceptions.HTTPError):
+        response = error.response
+        if response is None:
+            return True
+        status = response.status_code
+        # Retry on rate limiting and server errors only.
+        return status == 429 or status >= 500
+
+    return True
+
+
+def request_with_backoff(
+    url: str,
+    *,
+    method: Callable[..., requests.Response] = requests.get,
+    max_attempts: Optional[int] = None,
+    min_backoff: Optional[float] = None,
+    max_backoff: Optional[float] = None,
+    **request_kwargs: Any,
+) -> requests.Response:
+    """Execute an HTTP request with exponential backoff and logging."""
+
+    settings = get_settings().trending_request_backoff
+    attempts_limit = max_attempts or settings.max_attempts
+    backoff_min = min_backoff if min_backoff is not None else settings.min_seconds
+    backoff_max = max_backoff if max_backoff is not None else settings.max_seconds
+
+    attempts_limit = max(1, attempts_limit)
+    backoff_min = max(0.0, backoff_min)
+    backoff_max = max(backoff_min if backoff_min > 0 else 0.0, backoff_max)
+
+    attempt = 1
+    method_name = getattr(method, "__name__", str(method))
+    while True:
+        LOGGER.debug("Attempt %d/%d for %s %s", attempt, attempts_limit, method_name.upper(), url)
+        try:
+            response = method(url, **request_kwargs)
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as exc:
+            retriable = _is_retriable_error(exc)
+            if not retriable:
+                LOGGER.error("Non-retriable error calling %s %s: %s", method_name.upper(), url, exc)
+                raise
+
+            if attempt >= attempts_limit:
+                LOGGER.error(
+                    "Request %s %s failed after %d attempts: %s",
+                    method_name.upper(),
+                    url,
+                    attempt,
+                    exc,
+                )
+                raise
+
+            sleep_time = min(backoff_max, backoff_min * (2 ** (attempt - 1))) if backoff_min > 0 else 0
+            if sleep_time > 0:
+                LOGGER.warning(
+                    "Attempt %d/%d for %s %s failed: %s. Retrying in %.2f seconds.",
+                    attempt,
+                    attempts_limit,
+                    method_name.upper(),
+                    url,
+                    exc,
+                    sleep_time,
+                )
+                time.sleep(sleep_time)
+            else:
+                LOGGER.warning(
+                    "Attempt %d/%d for %s %s failed: %s. Retrying immediately.",
+                    attempt,
+                    attempts_limit,
+                    method_name.upper(),
+                    url,
+                    exc,
+                )
+            attempt += 1
 
 
 class TrendingVideoCreator:
@@ -66,9 +160,8 @@ class TrendingVideoCreator:
 
         url = f"https://itunes.apple.com/{country}/rss/topsongs/limit={limit}/json"
         LOGGER.debug("Fetching top songs from %s", url)
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        payload = response.json()
+        with request_with_backoff(url, timeout=10) as response:
+            payload = response.json()
 
         entries: Iterable[dict] = payload.get("feed", {}).get("entry", [])
         tracks: List[TrendingTrack] = []
@@ -92,8 +185,7 @@ class TrendingVideoCreator:
 
         destination.parent.mkdir(parents=True, exist_ok=True)
         LOGGER.info("Downloading preview for \"%s\"", track.display_name)
-        with requests.get(track.preview_url, timeout=10, stream=True) as response:
-            response.raise_for_status()
+        with request_with_backoff(track.preview_url, timeout=10, stream=True) as response:
             with destination.open("wb") as handle:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:

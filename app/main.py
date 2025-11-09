@@ -17,26 +17,14 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from . import auth, models
 from .ai_workflow import get_ai_video_workflow
 from .database import Base, SessionLocal, engine, get_db
-from .logging_config import configure_logging
-
-configure_logging()
-logger = logging.getLogger("social_admin.app")
-
-REQUEST_COUNT = Counter(
-    "social_admin_requests_total",
-    "Total HTTP requests",
-    ["method", "path", "status"],
-)
-REQUEST_LATENCY = Histogram(
-    "social_admin_request_latency_seconds",
-    "HTTP request latency in seconds",
-    ["method", "path"],
-)
+from .monitoring import configure_monitoring
 
 app = FastAPI(title="Social Admin")
 app.add_middleware(SessionMiddleware, secret_key="super-secret-session-key")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+
+configure_monitoring(app)
 
 
 @app.middleware("http")

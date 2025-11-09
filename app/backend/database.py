@@ -61,6 +61,11 @@ def run_startup_migrations() -> None:
                 column["name"] for column in inspector.get_columns("job_media")
             }
 
+            if "media_url" not in job_media_columns:
+                connection.execute(
+                    text("ALTER TABLE job_media ADD COLUMN media_url VARCHAR(500)")
+                )
+
             if "job_id" not in job_media_columns:
                 connection.execute(
                     text("ALTER TABLE job_media ADD COLUMN job_id INTEGER")

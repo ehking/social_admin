@@ -1,58 +1,67 @@
 {% extends "base.html" %}
 {% block title %}تنظیمات سرویس‌ها{% endblock %}
+
 {% block content %}
-<div class="row g-4">
-    <div class="col-lg-5">
-        <div class="card p-4">
-            <h2 class="h5 mb-3">افزودن/ویرایش کلید سرویس</h2>
-            <form method="post" action="/settings">
-                <div class="mb-3">
-                    <label class="form-label" for="name">نام سرویس</label>
-                    <input type="text" class="form-control" id="name" name="name" placeholder="مثلاً OpenAI" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="key">کلید یا شناسه</label>
-                    <input type="text" class="form-control" id="key" name="key" placeholder="مثلاً OPENAI_API_KEY" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="value">مقدار</label>
-                    <textarea class="form-control" id="value" name="value" rows="3" placeholder="مقدار توکن یا JSON" required></textarea>
-                </div>
-                <button class="btn btn-primary" type="submit">ذخیره</button>
-            </form>
+<div class="row">
+    <div class="col-lg-5 mb-4">
+        <div class="card card-outline card-primary h-100">
+            <div class="card-header border-0">
+                <h3 class="card-title">افزودن/ویرایش کلید سرویس</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/settings">
+                    <div class="form-group">
+                        <label class="form-label" for="name">نام سرویس</label>
+                        <input type="text" class="form-control" id="name" name="name" placeholder="مثلاً OpenAI" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="key">کلید یا شناسه</label>
+                        <input type="text" class="form-control" id="key" name="key" placeholder="مثلاً OPENAI_API_KEY" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="value">مقدار</label>
+                        <textarea class="form-control" id="value" name="value" rows="3" placeholder="مقدار توکن یا JSON" required></textarea>
+                    </div>
+                    <button class="btn btn-primary" type="submit"><i class="fas fa-save ml-1"></i> ذخیره</button>
+                </form>
+            </div>
         </div>
     </div>
-    <div class="col-lg-7">
-        <div class="card p-4">
-            <h2 class="h5 mb-3">لیست کلیدها</h2>
-            <div class="table-responsive">
-                <table class="table table-striped align-middle">
-                    <thead>
-                    <tr>
-                        <th>نام</th>
-                        <th>کلید</th>
-                        <th>مدیریت</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for token in tokens %}
+    <div class="col-lg-7 mb-4">
+        <div class="card card-outline card-info h-100">
+            <div class="card-header border-0">
+                <h3 class="card-title">لیست کلیدها</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0 align-middle">
+                        <thead>
                         <tr>
-                            <td>{{ token.name }}</td>
-                            <td><code>{{ token.key }}</code></td>
-                            <td>
-                                <form method="post" action="/settings/delete" class="d-inline">
-                                    <input type="hidden" name="token_id" value="{{ token.id }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('حذف این کلید؟');">حذف</button>
-                                </form>
-                            </td>
+                            <th>نام</th>
+                            <th>کلید</th>
+                            <th class="text-center">مدیریت</th>
                         </tr>
-                    {% else %}
-                        <tr>
-                            <td colspan="3" class="text-center text-muted">کلیدی ثبت نشده است.</td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                        {% for token in tokens %}
+                            <tr>
+                                <td>{{ token.name }}</td>
+                                <td><code>{{ token.key }}</code></td>
+                                <td class="text-center">
+                                    <form method="post" action="/settings/delete" class="d-inline" onsubmit="return confirm('حذف این کلید؟');">
+                                        <input type="hidden" name="token_id" value="{{ token.id }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">حذف</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">کلیدی ثبت نشده است.</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

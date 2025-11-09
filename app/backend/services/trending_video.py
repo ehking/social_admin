@@ -155,7 +155,23 @@ class TrendingTrack:
 
     @property
     def display_name(self) -> str:
-        return f"{self.title} — {self.artist}" if self.artist else self.title
+        """Return a human-friendly name for the track."""
+
+        title = (self.title or "").strip()
+        artist = (self.artist or "").strip()
+
+        if title and artist:
+            return f"{title} — {artist}"
+        if title:
+            return title
+        if artist:
+            return artist
+
+        preview = (self.preview_url or "").strip()
+        if preview:
+            return preview
+
+        return "Unknown Track"
 
 
 def _is_retriable_error(error: requests.exceptions.RequestException) -> bool:
@@ -404,7 +420,18 @@ class TrendingVideoCreator:
 
     @staticmethod
     def _default_job_name(track: TrendingTrack) -> str:
-        return f"trend-video:{track.display_name}"
+        """Build a deterministic job name for generated media."""
+
+        display_name = (track.display_name or "").strip()
+        if not display_name:
+            for candidate in (track.title, track.artist, track.preview_url):
+                candidate = (candidate or "").strip()
+                if candidate:
+                    display_name = candidate
+                    break
+
+        sanitized = TrendingVideoCreator._sanitize_filename(display_name)
+        return f"trend-video:{sanitized}"
 
     def _record_job_media(self, *, job_name: str, upload_result: StorageResult) -> models.JobMedia:
         if not self.db_session:

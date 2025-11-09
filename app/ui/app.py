@@ -45,16 +45,15 @@ from .app_presenters.accounts_presenter import AccountsPresenter
 from .app_presenters.ai_presenter import AIVideoWorkflowPresenter
 from .app_presenters.auth_presenter import AuthPresenter
 from .app_presenters.dashboard_presenter import DashboardPresenter
-from .app_presenters.documentation_presenter import DocumentationPresenter
+from .app_presenters.manual_video_presenter import ManualVideoPresenter
 from .app_presenters.scheduler_presenter import SchedulerPresenter
 from .app_presenters.settings_presenter import SettingsPresenter
-from .app_presenters.logs_presenter import LogsPresenter
 from .views import (
     accounts,
     ai,
     auth as auth_views,
     dashboard,
-    logs,
+    manual_video,
     metrics,
     scheduler,
     settings,
@@ -93,7 +92,7 @@ def create_app() -> FastAPI:
     settings_presenter = SettingsPresenter(templates)
     accounts_presenter = AccountsPresenter(templates)
     scheduler_presenter = SchedulerPresenter(templates)
-    logs_presenter = LogsPresenter(templates)
+    manual_video_presenter = ManualVideoPresenter(templates)
     ai_presenter = AIVideoWorkflowPresenter()
     documentation_presenter = DocumentationPresenter(templates)
 
@@ -102,6 +101,7 @@ def create_app() -> FastAPI:
     app.include_router(settings.create_router(settings_presenter))
     app.include_router(accounts.create_router(accounts_presenter))
     app.include_router(scheduler.create_router(scheduler_presenter))
+    app.include_router(manual_video.create_router(manual_video_presenter))
     app.include_router(ai.create_router(ai_presenter))
     app.include_router(documentation.create_router(documentation_presenter))
     app.include_router(metrics.create_router())

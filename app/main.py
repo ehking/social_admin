@@ -26,6 +26,8 @@ templates = Jinja2Templates(directory="app/templates")
 
 configure_monitoring(app)
 
+logger = logging.getLogger(__name__)
+
 
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):

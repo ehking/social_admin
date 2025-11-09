@@ -34,6 +34,20 @@ def legacy_engine(tmp_path, monkeypatch):
             )
         )
 
+        connection.execute(
+            text(
+                "CREATE TABLE job_media ("
+                "id INTEGER PRIMARY KEY,"
+                "job_name VARCHAR(150),"
+                "media_type VARCHAR(50) NOT NULL,"
+                "media_url VARCHAR(500),"
+                "storage_key VARCHAR(255),"
+                "storage_url VARCHAR(500),"
+                "created_at DATETIME NOT NULL"
+                ")"
+            )
+        )
+
     monkeypatch.setattr(database, "engine", engine)
     yield engine
     engine.dispose()
@@ -51,3 +65,15 @@ def test_run_startup_migrations_adds_missing_role_column(legacy_engine):
             text("SELECT role FROM admin_users WHERE username = 'legacy'")
         ).scalar_one()
         assert role_value == "ADMIN"
+
+
+def test_run_startup_migrations_adds_job_id_column(legacy_engine):
+    database.run_startup_migrations()
+
+    with legacy_engine.begin() as connection:
+        columns = connection.execute(text("PRAGMA table_info(job_media)")).fetchall()
+        column_names = {column[1] for column in columns}
+        assert "job_id" in column_names
+
+        job_id_column = next(column for column in columns if column[1] == "job_id")
+        assert job_id_column[2].upper() == "INTEGER"

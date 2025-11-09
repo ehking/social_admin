@@ -1,0 +1,30 @@
+body {
+    background-color: #f5f6f8;
+    font-family: "Vazirmatn", "IRANSans", sans-serif;
+}
+
+.card {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05);
+    border: none;
+}
+
+form label {
+    font-weight: 600;
+}
+
+.table thead th {
+    background-color: #f0f1f5;
+    font-weight: 600;
+}
+
+textarea.form-control {
+    min-height: 120px;
+}
+
+.navbar-brand {
+    font-weight: 700;
+}
+
+.badge-status {
+    font-size: 0.85rem;
+}

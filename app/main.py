@@ -142,7 +142,11 @@ async def metrics() -> Response:
 
 @app.get("/settings")
 async def settings(request: Request, db: Session = Depends(get_db)):
-    user = auth.get_logged_in_user(request, db)
+    user = auth.get_logged_in_user(
+        request,
+        db,
+        required_roles=[models.AdminRole.ADMIN, models.AdminRole.SUPERADMIN],
+    )
     if not user:
         return RedirectResponse(url="/login", status_code=302)
 
@@ -174,7 +178,11 @@ async def create_or_update_token(
     value: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = auth.get_logged_in_user(request, db)
+    user = auth.get_logged_in_user(
+        request,
+        db,
+        required_roles=[models.AdminRole.ADMIN, models.AdminRole.SUPERADMIN],
+    )
     if not user:
         return RedirectResponse(url="/login", status_code=302)
 
@@ -199,7 +207,11 @@ async def create_or_update_token(
 
 @app.post("/settings/delete")
 async def delete_token(request: Request, token_id: int = Form(...), db: Session = Depends(get_db)):
-    user = auth.get_logged_in_user(request, db)
+    user = auth.get_logged_in_user(
+        request,
+        db,
+        required_roles=[models.AdminRole.ADMIN, models.AdminRole.SUPERADMIN],
+    )
     if not user:
         return RedirectResponse(url="/login", status_code=302)
 

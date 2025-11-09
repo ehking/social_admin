@@ -1,95 +1,105 @@
 {% extends "base.html" %}
-{% block title %}داشبورد مدیریت{% endblock %}
-
+{% block title %}داشبورد | Social Admin{% endblock %}
+{% block page_title %}داشبورد مدیریتی{% endblock %}
+{% block page_subtitle %}تصویر کلی از وضعیت حساب‌ها، پست‌های زمان‌بندی شده و توکن‌ها{% endblock %}
 {% block content %}
-<div class="row">
-    <div class="col-lg-4 col-md-6 mb-4">
-        <div class="card card-outline card-primary h-100">
-            <div class="card-header border-0">
-                <h3 class="card-title">خلاصه سرویس‌ها</h3>
-            </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for token in tokens %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>{{ token.name }}</span>
-                            <span class="badge badge-primary badge-status">{{ token.key }}</span>
-                        </li>
-                    {% else %}
-                        <li class="list-group-item text-muted">کلیدی ثبت نشده است.</li>
+<section class="grid grid-cards">
+    <article class="card">
+        <h2 class="card-title">تعداد حساب‌ها</h2>
+        <p class="card-value">{{ accounts|length }}</p>
+        <p class="card-meta">مدیریت حساب‌های متصل در صفحه حساب‌ها</p>
+    </article>
+    <article class="card">
+        <h2 class="card-title">پست‌های در انتظار</h2>
+        <p class="card-value">{{ scheduled_posts|length }}</p>
+        <p class="card-meta">نزدیک‌ترین زمان‌بندی‌ها در جدول زیر آمده است</p>
+    </article>
+    <article class="card">
+        <h2 class="card-title">توکن‌های فعال</h2>
+        <p class="card-value">{{ tokens|length }}</p>
+        <p class="card-meta">مدیریت کلیدها در صفحه تنظیمات</p>
+    </article>
+</section>
+<section class="panel">
+    <header class="panel-header">
+        <h2>آخرین حساب‌های متصل</h2>
+        <a class="btn btn-link" href="/accounts">مدیریت حساب‌ها</a>
+    </header>
+    {% if accounts %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>نام نمایشی</th>
+                        <th>پلتفرم</th>
+                        <th>شناسه صفحه</th>
+                        <th>تاریخ ایجاد</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in accounts[:6] %}
+                        <tr>
+                            <td>{{ account.display_name }}</td>
+                            <td>{{ account.platform }}</td>
+                            <td>{{ account.page_id or '-' }}</td>
+                            <td>{{ account.created_at.strftime('%Y-%m-%d %H:%M') if account.created_at else '' }}</td>
+                        </tr>
                     {% endfor %}
-                </ul>
-            </div>
-            <div class="card-footer bg-transparent text-right">
-                <a href="/settings" class="btn btn-sm btn-link text-primary">مدیریت تنظیمات</a>
-            </div>
+                </tbody>
+            </table>
         </div>
-    </div>
-    <div class="col-lg-4 col-md-6 mb-4">
-        <div class="card card-outline card-info h-100">
-            <div class="card-header border-0">
-                <h3 class="card-title">اکانت‌های فعال</h3>
-            </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for account in accounts %}
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>{{ account.display_name }}</span>
-                                <span class="badge badge-info text-dark">{{ account.platform }}</span>
-                            </div>
-                            {% if account.page_id %}
-                                <small class="text-muted d-block">Page ID: {{ account.page_id }}</small>
-                            {% endif %}
-                            {% if account.youtube_channel_id %}
-                                <small class="text-muted d-block">کانال یوتیوب: {{ account.youtube_channel_id }}</small>
-                            {% endif %}
-                            {% if account.telegram_chat_id %}
-                                <small class="text-muted d-block">چت تلگرام: {{ account.telegram_chat_id }}</small>
-                            {% endif %}
-                        </li>
-                    {% else %}
-                        <li class="list-group-item text-muted">اکانتی ثبت نشده است.</li>
+    {% else %}
+        <p class="empty">هیچ حسابی ثبت نشده است.</p>
+    {% endif %}
+</section>
+<section class="panel">
+    <header class="panel-header">
+        <h2>برنامه زمان‌بندی محتوا</h2>
+        <a class="btn btn-link" href="/scheduler">مشاهده همه</a>
+    </header>
+    {% if scheduled_posts %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>عنوان</th>
+                        <th>حساب</th>
+                        <th>زمان اجرا</th>
+                        <th>وضعیت</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for post in scheduled_posts[:8] %}
+                        <tr>
+                            <td>{{ post.title }}</td>
+                            <td>{{ post.account.display_name if post.account else '-' }}</td>
+                            <td>{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') if post.scheduled_time else '' }}</td>
+                            <td><span class="badge badge-soft">{{ post.status or 'pending' }}</span></td>
+                        </tr>
                     {% endfor %}
-                </ul>
-            </div>
-            <div class="card-footer bg-transparent text-right">
-                <a href="/accounts" class="btn btn-sm btn-link text-primary">مدیریت اکانت‌ها</a>
-            </div>
+                </tbody>
+            </table>
         </div>
-    </div>
-    <div class="col-lg-4 col-md-12 mb-4">
-        <div class="card card-outline card-success h-100">
-            <div class="card-header border-0">
-                <h3 class="card-title">صف انتشار آینده</h3>
-            </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    {% for post in scheduled_posts %}
-                        <div class="list-group-item">
-                            <h3 class="h6 mb-1">{{ post.title }}</h3>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="text-muted small">{{ post.account.display_name }}</span>
-                                <span class="badge badge-success badge-status">{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</span>
-                            </div>
-                            {% if post.content %}
-                                <p class="small mt-2 mb-0 text-muted">{{ post.content[:120] }}{% if post.content|length > 120 %}...{% endif %}</p>
-                            {% endif %}
-                            {% if post.video_url %}
-                                <div class="mt-2">
-                                    <span class="badge badge-dark">ویدیو آماده</span>
-                                </div>
-                            {% endif %}
-                        </div>
-                    {% else %}
-                        <div class="list-group-item text-muted">پستی زمان‌بندی نشده است.</div>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="card-footer bg-transparent text-right">
-                <a href="/scheduler" class="btn btn-sm btn-link text-primary">مدیریت برنامه‌ریز</a>
-            </div>
+    {% else %}
+        <p class="empty">پستی زمان‌بندی نشده است.</p>
+    {% endif %}
+</section>
+<section class="panel">
+    <header class="panel-header">
+        <h2>توکن‌های سرویس</h2>
+        <a class="btn btn-link" href="/settings">مدیریت توکن‌ها</a>
+    </header>
+    {% if tokens %}
+        <div class="chips">
+            {% for token in tokens[:10] %}
+                <span class="chip">
+                    <span class="chip-title">{{ token.name }}</span>
+                    <span class="chip-subtitle">{{ token.key }}</span>
+                </span>
+            {% endfor %}
         </div>
-    </div>
-</div>
+    {% else %}
+        <p class="empty">هیچ توکن فعالی ثبت نشده است.</p>
+    {% endif %}
+</section>
 {% endblock %}

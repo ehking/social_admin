@@ -1,69 +1,70 @@
 {% extends "base.html" %}
-{% block title %}تنظیمات سرویس‌ها{% endblock %}
-
+{% block title %}تنظیمات | Social Admin{% endblock %}
+{% block page_title %}تنظیمات و توکن‌های سرویس{% endblock %}
+{% block page_subtitle %}کلیدهای دسترسی به سرویس‌ها را مدیریت کنید{% endblock %}
 {% block content %}
-<div class="row">
-    <div class="col-lg-5 mb-4">
-        <div class="card card-outline card-primary h-100">
-            <div class="card-header border-0">
-                <h3 class="card-title">افزودن/ویرایش کلید سرویس</h3>
-            </div>
-            <div class="card-body">
-                <form method="post" action="/settings">
-                    <div class="form-group">
-                        <label class="form-label" for="name">نام سرویس</label>
-                        <input type="text" class="form-control" id="name" name="name" placeholder="مثلاً OpenAI" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="key">کلید یا شناسه</label>
-                        <input type="text" class="form-control" id="key" name="key" placeholder="مثلاً OPENAI_API_KEY" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="value">مقدار</label>
-                        <textarea class="form-control" id="value" name="value" rows="3" placeholder="مقدار توکن یا JSON" required></textarea>
-                    </div>
-                    <button class="btn btn-primary" type="submit"><i class="fas fa-save ml-1"></i> ذخیره</button>
-                </form>
-            </div>
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>افزودن یا ویرایش توکن</h2>
+            <p class="panel-description">کلیدهایی که برای ارتباط با سرویس‌ها استفاده می‌شوند</p>
         </div>
-    </div>
-    <div class="col-lg-7 mb-4">
-        <div class="card card-outline card-info h-100">
-            <div class="card-header border-0">
-                <h3 class="card-title">لیست کلیدها</h3>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-striped mb-0 align-middle">
-                        <thead>
+    </header>
+    <form method="post" action="/settings" class="form-grid">
+        <div class="form-field">
+            <label for="name">نام سرویس</label>
+            <input type="text" id="name" name="name" required>
+        </div>
+        <div class="form-field">
+            <label for="key">کلید</label>
+            <input type="text" id="key" name="key" required>
+        </div>
+        <div class="form-field full">
+            <label for="value">مقدار</label>
+            <textarea id="value" name="value" rows="3" required></textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn">ذخیره</button>
+        </div>
+    </form>
+</section>
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>توکن‌های ذخیره شده</h2>
+            <p class="panel-description">کلیدهای موجود در سیستم</p>
+        </div>
+    </header>
+    {% if tokens %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>نام</th>
+                        <th>کلید</th>
+                        <th>تاریخ ایجاد</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for token in tokens %}
                         <tr>
-                            <th>نام</th>
-                            <th>کلید</th>
-                            <th class="text-center">مدیریت</th>
+                            <td>{{ token.name }}</td>
+                            <td>{{ token.key }}</td>
+                            <td>{{ token.created_at.strftime('%Y-%m-%d %H:%M') if token.created_at else '' }}</td>
+                            <td class="actions">
+                                <form method="post" action="/settings/delete" onsubmit="return confirm('توکن حذف شود؟');">
+                                    <input type="hidden" name="token_id" value="{{ token.id }}">
+                                    <button type="submit" class="btn btn-small btn-danger">حذف</button>
+                                </form>
+                            </td>
                         </tr>
-                        </thead>
-                        <tbody>
-                        {% for token in tokens %}
-                            <tr>
-                                <td>{{ token.name }}</td>
-                                <td><code>{{ token.key }}</code></td>
-                                <td class="text-center">
-                                    <form method="post" action="/settings/delete" class="d-inline" onsubmit="return confirm('حذف این کلید؟');">
-                                        <input type="hidden" name="token_id" value="{{ token.id }}">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">حذف</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        {% else %}
-                            <tr>
-                                <td colspan="3" class="text-center text-muted">کلیدی ثبت نشده است.</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </div>
-</div>
+    {% else %}
+        <p class="empty">توکن فعالی ثبت نشده است.</p>
+    {% endif %}
+</section>
 {% endblock %}

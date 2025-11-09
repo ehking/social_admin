@@ -269,3 +269,28 @@ textarea.form-control {
     font-size: 0.95rem;
     line-height: 1.6;
 }
+
+/* RTL helpers to ensure Bootstrap spacing utilities behave correctly */
+[dir="rtl"] .ml-auto {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+
+[dir="rtl"] .ml-1 {
+    margin-left: 0 !important;
+    margin-right: 0.25rem !important;
+}
+
+[dir="rtl"] .ml-2 {
+    margin-left: 0 !important;
+    margin-right: 0.5rem !important;
+}
+
+[dir="rtl"] .mr-2 {
+    margin-right: 0 !important;
+    margin-left: 0.5rem !important;
+}
+
+[dir="rtl"] .text-left {
+    text-align: right !important;
+}

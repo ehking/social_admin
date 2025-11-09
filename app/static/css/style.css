@@ -28,3 +28,7 @@ textarea.form-control {
 .badge-status {
     font-size: 0.85rem;
 }
+
+.scenario-preview {
+    white-space: pre-wrap;
+}

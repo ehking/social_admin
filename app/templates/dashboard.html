@@ -59,6 +59,11 @@
                         {% if post.content %}
                             <p class="small mt-2 mb-0 text-muted">{{ post.content[:120] }}{% if post.content|length > 120 %}...{% endif %}</p>
                         {% endif %}
+                        {% if post.video_url %}
+                            <div class="mt-2">
+                                <span class="badge bg-dark text-light">ویدیو آماده</span>
+                            </div>
+                        {% endif %}
                     </div>
                 {% else %}
                     <div class="list-group-item text-muted">پستی زمان‌بندی نشده است.</div>

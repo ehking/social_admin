@@ -255,6 +255,7 @@ async def create_schedule(
     account_id: int = Form(...),
     title: str = Form(...),
     content: Optional[str] = Form(None),
+    video_url: Optional[str] = Form(None),
     scheduled_time: str = Form(...),
     db: Session = Depends(get_db),
 ):
@@ -285,10 +286,19 @@ async def create_schedule(
             },
             status_code=400,
         )
+    text_content = None
+    if content:
+        text_content = content.strip() or None
+
+    video_link = None
+    if video_url:
+        video_link = video_url.strip() or None
+
     post = models.ScheduledPost(
         account_id=account_id,
         title=title,
-        content=content,
+        content=text_content,
+        video_url=video_link,
         scheduled_time=schedule_dt,
     )
     db.add(post)

@@ -1,5 +1,29 @@
 @import url('https://cdn.jsdelivr.net/npm/vazirmatn@33.0.2/Vazirmatn-font-face.css');
 
+@font-face {
+    font-family: 'IRANYekan';
+    font-style: normal;
+    font-weight: 400;
+    src: url('https://cdn.fontcdn.ir/Font/Persian/IranYekan/IRANYekanRegular.woff2') format('woff2');
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'IRANYekan';
+    font-style: normal;
+    font-weight: 500;
+    src: url('https://cdn.fontcdn.ir/Font/Persian/IranYekan/IRANYekanMedium.woff2') format('woff2');
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'IRANYekan';
+    font-style: normal;
+    font-weight: 700;
+    src: url('https://cdn.fontcdn.ir/Font/Persian/IranYekan/IRANYekanBold.woff2') format('woff2');
+    font-display: swap;
+}
+
 :root {
     --sa-primary: #6366f1;
     --sa-primary-light: rgba(99, 102, 241, 0.12);
@@ -8,8 +32,76 @@
 
 body {
     background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
-    font-family: "Vazirmatn", "IRANSans", sans-serif;
+    font-family: "IRANYekan", "Vazirmatn", "IRANSans", sans-serif;
     color: #1e293b;
+}
+
+.btn {
+    font-family: inherit;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.55rem 1.5rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.75rem 1.5rem rgba(99, 102, 241, 0.18);
+}
+
+.btn:hover::after {
+    opacity: 1;
+}
+
+.btn:active {
+    transform: translateY(0);
+    box-shadow: 0 0.25rem 0.85rem rgba(15, 23, 42, 0.12);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #4f46e5, #818cf8);
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #4338ca, #6366f1);
+}
+
+.btn-outline-primary {
+    background: transparent;
+    color: var(--sa-primary);
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    box-shadow: none;
+}
+
+.btn-outline-primary:hover {
+    color: #ffffff;
+    border-color: transparent;
+    background: linear-gradient(135deg, #6366f1, #818cf8);
+}
+
+.btn-light {
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--sa-dark);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.btn-light:hover {
+    background: #ffffff;
+    box-shadow: 0 1rem 2rem rgba(15, 23, 42, 0.08);
 }
 
 .wrapper {

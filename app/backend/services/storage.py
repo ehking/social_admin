@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,9 @@ from typing import Protocol
 from uuid import uuid4
 
 from ..config import AppSettings, get_settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class StorageError(RuntimeError):
@@ -45,6 +49,7 @@ class LocalFilesystemStorage:
     def __init__(self, *, base_path: Path) -> None:
         self.base_path = Path(base_path).resolve()
         self.base_path.mkdir(parents=True, exist_ok=True)
+        logger.debug("Local storage initialised", extra={"base_path": str(self.base_path)})
 
     def _resolve_destination(self, destination_name: str | None, source: Path) -> Path:
         if destination_name:
@@ -75,6 +80,10 @@ class LocalFilesystemStorage:
         destination = self._resolve_destination(destination_name, source)
         shutil.copy2(source, destination)
         relative_key = str(destination.relative_to(self.base_path))
+        logger.info(
+            "Stored file locally",
+            extra={"source": str(source), "destination": relative_key},
+        )
         return StorageResult(key=relative_key, url=destination.as_uri())
 
     def delete_object(self, key: str) -> None:
@@ -85,6 +94,7 @@ class LocalFilesystemStorage:
             target.unlink()
         except FileNotFoundError:
             return
+        logger.info("Deleted local storage object", extra={"key": key})
 
 
 class S3Storage:
@@ -109,6 +119,10 @@ class S3Storage:
 
         self.bucket = bucket
         self.prefix = prefix.strip("/") if prefix else ""
+        logger.debug(
+            "S3 storage initialised",
+            extra={"bucket": self.bucket, "prefix": self.prefix or None},
+        )
 
     def _build_key(self, destination_name: str | None, source: Path) -> str:
         key = destination_name or f"{uuid4().hex}{source.suffix}"
@@ -136,6 +150,10 @@ class S3Storage:
                 self.client.upload_file(str(source), self.bucket, key)
         except Exception as exc:  # pragma: no cover - network operations are not tested
             raise StorageError(f"Failed to upload file to S3: {exc}") from exc
+        logger.info(
+            "Uploaded file to S3",
+            extra={"bucket": self.bucket, "key": key, "source": str(source)},
+        )
         return StorageResult(key=key, url=f"s3://{self.bucket}/{key}")
 
     def delete_object(self, key: str) -> None:
@@ -143,6 +161,7 @@ class S3Storage:
             self.client.delete_object(Bucket=self.bucket, Key=key)
         except Exception as exc:  # pragma: no cover - network operations are not tested
             raise StorageError(f"Failed to delete S3 object {key}: {exc}") from exc
+        logger.info("Deleted S3 object", extra={"bucket": self.bucket, "key": key})
 
 
 def get_storage_service(settings: AppSettings | None = None) -> StorageService:
@@ -151,11 +170,18 @@ def get_storage_service(settings: AppSettings | None = None) -> StorageService:
     settings = settings or get_settings()
 
     if settings.storage_backend == "local":
-        return LocalFilesystemStorage(base_path=settings.storage_local_base_path)
+        storage = LocalFilesystemStorage(base_path=settings.storage_local_base_path)
+        logger.debug("Using local storage backend", extra={"base_path": str(settings.storage_local_base_path)})
+        return storage
 
     if settings.storage_backend == "s3":
         if not settings.storage_s3_bucket:
             raise StorageError("STORAGE_S3_BUCKET is required when using the S3 backend")
-        return S3Storage(bucket=settings.storage_s3_bucket, prefix=settings.storage_s3_prefix)
+        storage = S3Storage(bucket=settings.storage_s3_bucket, prefix=settings.storage_s3_prefix)
+        logger.debug(
+            "Using S3 storage backend",
+            extra={"bucket": settings.storage_s3_bucket, "prefix": settings.storage_s3_prefix},
+        )
+        return storage
 
     raise StorageError(f"Unsupported storage backend: {settings.storage_backend}")

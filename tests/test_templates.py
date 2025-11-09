@@ -47,40 +47,36 @@ def test_scheduler_template_renders_job_row():
     assert "پیش‌نمایش محتوای جذاب تابستانی" in html
 
 
-def test_documentation_template_renders_sections():
+def test_logs_template_renders_entries():
     env = Environment(
         loader=FileSystemLoader("app/ui/templates"),
         autoescape=select_autoescape(["html", "xml"]),
     )
     env.globals["url_for"] = lambda name, **kwargs: f"/static/{kwargs.get('path', '')}"
 
-    template = env.get_template("documentation.html")
+    template = env.get_template("logs.html")
+    log_files = [
+        SimpleNamespace(
+            name="abc123.log",
+            modified_display="2024-05-01 10:00:00",
+            entries=[
+                {
+                    "level": "INFO",
+                    "badge_class": "info",
+                    "timestamp": "2024-05-01T10:00:00Z",
+                    "message": "job_started",
+                    "details": "{\n  \"job_id\": \"abc123\"\n}",
+                }
+            ],
+        )
+    ]
+
     html = template.render(
         user=SimpleNamespace(username="admin"),
-        active_page="docs",
-        sections=[
-            {
-                "title": "شروع سریع",
-                "description": "راهنمای اولیه",
-                "entries": [
-                    {"title": "گام ۱", "content": "نصب پیش‌نیازها"},
-                    {"title": "گام ۲", "content": "تعریف توکن‌ها"},
-                ],
-            }
-        ],
-        workflow_steps=[
-            {"title": "تهیه منابع", "details": "جمع‌آوری ورودی"},
-            {"title": "انتشار", "details": "ارسال به شبکه اجتماعی"},
-        ],
-        api_endpoints=[
-            {"method": "GET", "path": "/api/jobs", "description": "لیست سناریوها"},
-        ],
-        quick_links=[
-            {"title": "سند کامل الزامات", "description": "مطالعه فایل project_spec"},
-        ],
+        log_files=log_files,
+        active_page="logs",
     )
 
-    assert "شروع سریع" in html
-    assert "گام ۲" in html
-    assert "/api/jobs" in html
-    assert "سند کامل الزامات" in html
+    assert "abc123.log" in html
+    assert "job_started" in html
+    assert "badge-info" in html

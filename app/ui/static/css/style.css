@@ -165,19 +165,17 @@ textarea.form-control {
     height: 100%;
 }
 
-.main-footer {
-    background: transparent;
-    border-top: 1px solid rgba(148, 163, 184, 0.2);
+.log-entry-list pre {
+    direction: ltr;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
-@media (max-width: 991.98px) {
-    .content-wrapper {
-        border-radius: 0;
-        box-shadow: none;
-    }
+.log-entry-list li {
+    transition: box-shadow 0.2s ease-in-out;
+}
 
-    .nav-sidebar .nav-link {
-        transform: none !important;
-        box-shadow: none !important;
-    }
+.log-entry-list li:hover {
+    box-shadow: 0 0.5rem 1rem rgba(31, 45, 61, 0.08);
 }

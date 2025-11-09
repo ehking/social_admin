@@ -1,75 +1,94 @@
 {% extends "base.html" %}
 {% block title %}داشبورد مدیریت{% endblock %}
+
 {% block content %}
-<div class="row g-4">
-    <div class="col-lg-4">
-        <div class="card p-4 h-100">
-            <h2 class="h5 mb-3">خلاصه سرویس‌ها</h2>
-            <ul class="list-group list-group-flush">
-                {% for token in tokens %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span>{{ token.name }}</span>
-                        <span class="badge bg-primary rounded-pill">{{ token.key }}</span>
-                    </li>
-                {% else %}
-                    <li class="list-group-item text-muted">کلیدی ثبت نشده است.</li>
-                {% endfor %}
-            </ul>
-            <a href="/settings" class="btn btn-link mt-3">مدیریت تنظیمات</a>
-        </div>
-    </div>
-    <div class="col-lg-4">
-        <div class="card p-4 h-100">
-            <h2 class="h5 mb-3">اکانت‌های فعال</h2>
-            <ul class="list-group list-group-flush">
-                {% for account in accounts %}
-                    <li class="list-group-item">
-                        <div class="d-flex justify-content-between">
-                            <span>{{ account.display_name }}</span>
-                            <span class="badge bg-info text-dark">{{ account.platform }}</span>
-                        </div>
-                        {% if account.page_id %}
-                            <small class="text-muted">Page ID: {{ account.page_id }}</small><br>
-                        {% endif %}
-                        {% if account.youtube_channel_id %}
-                            <small class="text-muted">کانال یوتیوب: {{ account.youtube_channel_id }}</small><br>
-                        {% endif %}
-                        {% if account.telegram_chat_id %}
-                            <small class="text-muted">چت تلگرام: {{ account.telegram_chat_id }}</small>
-                        {% endif %}
-                    </li>
-                {% else %}
-                    <li class="list-group-item text-muted">اکانتی ثبت نشده است.</li>
-                {% endfor %}
-            </ul>
-            <a href="/accounts" class="btn btn-link mt-3">مدیریت اکانت‌ها</a>
-        </div>
-    </div>
-    <div class="col-lg-4">
-        <div class="card p-4 h-100">
-            <h2 class="h5 mb-3">صف انتشار آینده</h2>
-            <div class="list-group">
-                {% for post in scheduled_posts %}
-                    <div class="list-group-item">
-                        <h3 class="h6 mb-1">{{ post.title }}</h3>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="text-muted small">{{ post.account.display_name }}</span>
-                            <span class="badge bg-success badge-status">{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</span>
-                        </div>
-                        {% if post.content %}
-                            <p class="small mt-2 mb-0 text-muted">{{ post.content[:120] }}{% if post.content|length > 120 %}...{% endif %}</p>
-                        {% endif %}
-                        {% if post.video_url %}
-                            <div class="mt-2">
-                                <span class="badge bg-dark text-light">ویدیو آماده</span>
-                            </div>
-                        {% endif %}
-                    </div>
-                {% else %}
-                    <div class="list-group-item text-muted">پستی زمان‌بندی نشده است.</div>
-                {% endfor %}
+<div class="row">
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card card-outline card-primary h-100">
+            <div class="card-header border-0">
+                <h3 class="card-title">خلاصه سرویس‌ها</h3>
             </div>
-            <a href="/scheduler" class="btn btn-link mt-3">مدیریت برنامه‌ریز</a>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for token in tokens %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>{{ token.name }}</span>
+                            <span class="badge badge-primary badge-status">{{ token.key }}</span>
+                        </li>
+                    {% else %}
+                        <li class="list-group-item text-muted">کلیدی ثبت نشده است.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="card-footer bg-transparent text-left">
+                <a href="/settings" class="btn btn-sm btn-link text-primary">مدیریت تنظیمات</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card card-outline card-info h-100">
+            <div class="card-header border-0">
+                <h3 class="card-title">اکانت‌های فعال</h3>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for account in accounts %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ account.display_name }}</span>
+                                <span class="badge badge-info text-dark">{{ account.platform }}</span>
+                            </div>
+                            {% if account.page_id %}
+                                <small class="text-muted d-block">Page ID: {{ account.page_id }}</small>
+                            {% endif %}
+                            {% if account.youtube_channel_id %}
+                                <small class="text-muted d-block">کانال یوتیوب: {{ account.youtube_channel_id }}</small>
+                            {% endif %}
+                            {% if account.telegram_chat_id %}
+                                <small class="text-muted d-block">چت تلگرام: {{ account.telegram_chat_id }}</small>
+                            {% endif %}
+                        </li>
+                    {% else %}
+                        <li class="list-group-item text-muted">اکانتی ثبت نشده است.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="card-footer bg-transparent text-left">
+                <a href="/accounts" class="btn btn-sm btn-link text-primary">مدیریت اکانت‌ها</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-12 mb-4">
+        <div class="card card-outline card-success h-100">
+            <div class="card-header border-0">
+                <h3 class="card-title">صف انتشار آینده</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for post in scheduled_posts %}
+                        <div class="list-group-item">
+                            <h3 class="h6 mb-1">{{ post.title }}</h3>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">{{ post.account.display_name }}</span>
+                                <span class="badge badge-success badge-status">{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</span>
+                            </div>
+                            {% if post.content %}
+                                <p class="small mt-2 mb-0 text-muted">{{ post.content[:120] }}{% if post.content|length > 120 %}...{% endif %}</p>
+                            {% endif %}
+                            {% if post.video_url %}
+                                <div class="mt-2">
+                                    <span class="badge badge-dark">ویدیو آماده</span>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="list-group-item text-muted">پستی زمان‌بندی نشده است.</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card-footer bg-transparent text-left">
+                <a href="/scheduler" class="btn btn-sm btn-link text-primary">مدیریت برنامه‌ریز</a>
+            </div>
         </div>
     </div>
 </div>

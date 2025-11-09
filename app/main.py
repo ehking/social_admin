@@ -85,6 +85,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "accounts": accounts,
             "scheduled_posts": scheduled_posts,
             "tokens": tokens,
+            "active_page": "dashboard",
         },
     )
 
@@ -98,7 +99,12 @@ async def settings(request: Request, db: Session = Depends(get_db)):
     tokens = db.query(models.ServiceToken).all()
     return templates.TemplateResponse(
         "settings.html",
-        {"request": request, "user": user, "tokens": tokens},
+        {
+            "request": request,
+            "user": user,
+            "tokens": tokens,
+            "active_page": "settings",
+        },
     )
 
 
@@ -154,7 +160,12 @@ async def list_accounts(request: Request, db: Session = Depends(get_db)):
     accounts = db.query(models.SocialAccount).order_by(models.SocialAccount.created_at.desc()).all()
     return templates.TemplateResponse(
         "accounts.html",
-        {"request": request, "user": user, "accounts": accounts},
+        {
+            "request": request,
+            "user": user,
+            "accounts": accounts,
+            "active_page": "accounts",
+        },
     )
 
 
@@ -166,7 +177,12 @@ async def new_account(request: Request, db: Session = Depends(get_db)):
 
     return templates.TemplateResponse(
         "account_form.html",
-        {"request": request, "user": user, "account": None},
+        {
+            "request": request,
+            "user": user,
+            "account": None,
+            "active_page": "accounts",
+        },
     )
 
 
@@ -182,7 +198,12 @@ async def edit_account(account_id: int, request: Request, db: Session = Depends(
 
     return templates.TemplateResponse(
         "account_form.html",
-        {"request": request, "user": user, "account": account},
+        {
+            "request": request,
+            "user": user,
+            "account": account,
+            "active_page": "accounts",
+        },
     )
 
 
@@ -255,6 +276,7 @@ async def scheduler(request: Request, db: Session = Depends(get_db)):
             "user": user,
             "accounts": accounts,
             "posts": posts,
+            "active_page": "scheduler",
         },
     )
 
@@ -293,6 +315,7 @@ async def create_schedule(
                 "accounts": accounts,
                 "posts": posts,
                 "error": "فرمت تاریخ/زمان نامعتبر است.",
+                "active_page": "scheduler",
             },
             status_code=400,
         )

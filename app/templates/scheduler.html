@@ -1,144 +1,160 @@
 {% extends "base.html" %}
 {% block title %}برنامه‌ریز انتشار{% endblock %}
+
 {% block content %}
-<div class="row g-4">
-    <div class="col-lg-5">
-        <div class="card p-4 mb-4">
-            <h2 class="h5 mb-3">افزودن پست زمان‌بندی شده</h2>
-            {% if error %}
-                <div class="alert alert-danger">{{ error }}</div>
-            {% endif %}
-            <form method="post" action="/scheduler">
-                <div class="mb-3">
-                    <label class="form-label" for="account_id">اکانت هدف</label>
-                    <select class="form-select" id="account_id" name="account_id" required>
-                        <option value="">انتخاب کنید</option>
-                        {% for account in accounts %}
-                            <option value="{{ account.id }}">{{ account.display_name }} ({{ account.platform }})</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="title">عنوان</label>
-                    <input type="text" class="form-control" id="title" name="title" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="video_url">لینک ویدیو</label>
-                    <input type="url" class="form-control" id="video_url" name="video_url" placeholder="https://...">
-                    <div class="form-text">لینک مستقیم یا قابل پخش از ویدیوی مونتاژ شده را وارد کنید.</div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="content">سناریو یا توضیحات</label>
-                    <textarea class="form-control" id="content" name="content" rows="4" placeholder="جزئیات سناریو، کپشن یا یادداشت‌ها"></textarea>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="scheduled_time">زمان انتشار</label>
-                    <input type="datetime-local" class="form-control" id="scheduled_time" name="scheduled_time" required>
-                </div>
-                <button type="submit" class="btn btn-primary">افزودن به صف</button>
-            </form>
+<div class="row">
+    <div class="col-lg-5 mb-4">
+        <div class="card card-outline card-primary mb-4">
+            <div class="card-header border-0">
+                <h3 class="card-title">افزودن پست زمان‌بندی شده</h3>
+            </div>
+            <div class="card-body">
+                {% if error %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+                <form method="post" action="/scheduler">
+                    <div class="form-group">
+                        <label for="account_id">اکانت هدف</label>
+                        <select class="custom-select" id="account_id" name="account_id" required>
+                            <option value="">انتخاب کنید</option>
+                            {% for account in accounts %}
+                                <option value="{{ account.id }}">{{ account.display_name }} ({{ account.platform }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="title">عنوان</label>
+                        <input type="text" class="form-control" id="title" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="video_url">لینک ویدیو</label>
+                        <input type="url" class="form-control" id="video_url" name="video_url" placeholder="https://...">
+                        <small class="form-text text-muted">لینک مستقیم یا قابل پخش از ویدیوی مونتاژ شده را وارد کنید.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="content">سناریو یا توضیحات</label>
+                        <textarea class="form-control" id="content" name="content" rows="4" placeholder="جزئیات سناریو، کپشن یا یادداشت‌ها"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduled_time">زمان انتشار</label>
+                        <input type="datetime-local" class="form-control" id="scheduled_time" name="scheduled_time" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-calendar-plus ml-1"></i> افزودن به صف</button>
+                </form>
+            </div>
         </div>
-        <div class="card p-4">
-            <h2 class="h5 mb-3">پیش‌نمایش سناریو و ویدیو</h2>
-            <div class="mb-3">
-                <h3 class="h6 text-muted mb-1">عنوان</h3>
-                <p class="mb-0 fw-semibold" id="previewTitle">—</p>
+        <div class="card card-outline card-info">
+            <div class="card-header border-0">
+                <h3 class="card-title">پیش‌نمایش سناریو و ویدیو</h3>
             </div>
-            <div class="mb-4">
-                <h3 class="h6 text-muted mb-1">سناریو</h3>
-                <p class="scenario-preview mb-0 d-none" id="previewScenario"></p>
-                <p class="text-muted mb-0" id="previewScenarioEmpty">هنوز سناریویی نوشته نشده است.</p>
-            </div>
-            <div>
-                <h3 class="h6 text-muted mb-1">ویدیو</h3>
-                <div id="previewVideoWrapper" class="ratio ratio-16x9 mb-0 d-none">
-                    <video id="previewVideo" class="w-100 h-100" controls></video>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6 class="text-muted mb-1">عنوان</h6>
+                    <p class="mb-0 font-weight-bold" id="previewTitle">—</p>
                 </div>
-                <p class="text-muted mb-0" id="previewVideoEmpty">لینکی برای پیش‌نمایش ویدیو وارد نشده است.</p>
+                <div class="mb-4">
+                    <h6 class="text-muted mb-1">سناریو</h6>
+                    <p class="scenario-preview mb-0 d-none" id="previewScenario"></p>
+                    <p class="text-muted mb-0" id="previewScenarioEmpty">هنوز سناریویی نوشته نشده است.</p>
+                </div>
+                <div>
+                    <h6 class="text-muted mb-1">ویدیو</h6>
+                    <div id="previewVideoWrapper" class="embed-responsive embed-responsive-16by9 mb-0 d-none">
+                        <video id="previewVideo" class="embed-responsive-item" controls></video>
+                    </div>
+                    <p class="text-muted mb-0" id="previewVideoEmpty">لینکی برای پیش‌نمایش ویدیو وارد نشده است.</p>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-lg-7">
-        <div class="card p-4">
-            <h2 class="h5 mb-3">صف انتشار</h2>
-            <div class="table-responsive">
-                <table class="table table-striped align-middle">
-                    <thead>
-                    <tr>
-                        <th>عنوان</th>
-                        <th>اکانت</th>
-                        <th>زمان</th>
-                        <th>وضعیت</th>
-                        <th>مدیریت</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for post in posts %}
+    <div class="col-lg-7 mb-4">
+        <div class="card card-outline card-success h-100">
+            <div class="card-header border-0">
+                <h3 class="card-title">صف انتشار</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0 align-middle">
+                        <thead>
                         <tr>
-                            <td>{{ post.title }}</td>
-                            <td>{{ post.account.display_name }}</td>
-                            <td>{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td><span class="badge bg-secondary">{{ post.status }}</span></td>
-                            <td>
-                                <div class="d-flex gap-2">
-                                    <button
-                                        type="button"
-                                        class="btn btn-sm btn-outline-secondary"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#postPreviewModal"
-                                        data-title="{{ post.title }}"
-                                        data-account="{{ post.account.display_name }}"
-                                        data-time="{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') }}"
-                                        data-video="{{ (post.video_url or '')|e }}"
-                                        data-scenario="{{ (post.content or '')|e }}"
-                                    >
-                                        پیش‌نمایش
-                                    </button>
-                                    <form method="post" action="/scheduler/delete" onsubmit="return confirm('حذف این پست از صف؟');">
-                                        <input type="hidden" name="post_id" value="{{ post.id }}">
-                                        <button class="btn btn-sm btn-outline-danger" type="submit">حذف</button>
-                                    </form>
-                                </div>
-                            </td>
+                            <th>عنوان</th>
+                            <th>اکانت</th>
+                            <th>زمان</th>
+                            <th>وضعیت</th>
+                            <th class="text-center">مدیریت</th>
                         </tr>
-                    {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center text-muted">پستی در صف وجود ندارد.</td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                        {% for post in posts %}
+                            <tr>
+                                <td>{{ post.title }}</td>
+                                <td>{{ post.account.display_name }}</td>
+                                <td>{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td><span class="badge badge-secondary text-uppercase">{{ post.status }}</span></td>
+                                <td class="text-center">
+                                    <div class="d-inline-flex align-items-center">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-secondary mr-2"
+                                            data-toggle="modal"
+                                            data-target="#postPreviewModal"
+                                            data-title="{{ post.title }}"
+                                            data-account="{{ post.account.display_name }}"
+                                            data-time="{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') }}"
+                                            data-video="{{ (post.video_url or '')|e }}"
+                                            data-scenario="{{ (post.content or '')|e }}"
+                                        >
+                                            پیش‌نمایش
+                                        </button>
+                                        <form method="post" action="/scheduler/delete" onsubmit="return confirm('حذف این پست از صف؟');">
+                                            <input type="hidden" name="post_id" value="{{ post.id }}">
+                                            <button class="btn btn-sm btn-outline-danger" type="submit">حذف</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">پستی در صف وجود ندارد.</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 </div>
-<div class="modal fade" id="postPreviewModal" tabindex="-1" aria-labelledby="postPreviewModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+
+<div class="modal fade" id="postPreviewModal" tabindex="-1" role="dialog" aria-labelledby="postPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="postPreviewModalLabel">پیش‌نمایش پست</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="بستن"></button>
+                <button type="button" class="close" data-dismiss="modal" aria-label="بستن">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <h6 class="fw-bold mb-1" id="modalPreviewTitle">—</h6>
+                    <h6 class="font-weight-bold mb-1" id="modalPreviewTitle">—</h6>
                     <p class="text-muted small mb-0" id="modalPreviewMeta"></p>
                 </div>
                 <div class="mb-4">
-                    <h6 class="fw-bold mb-1">سناریو</h6>
+                    <h6 class="font-weight-bold mb-1">سناریو</h6>
                     <p class="scenario-preview mb-0 d-none" id="modalPreviewScenario"></p>
                     <p class="text-muted mb-0" id="modalPreviewScenarioEmpty">سناریویی برای این پست ثبت نشده است.</p>
                 </div>
                 <div>
-                    <h6 class="fw-bold mb-2">ویدیو</h6>
-                    <div class="ratio ratio-16x9 mb-2 d-none" id="modalPreviewVideoWrapper">
-                        <video id="modalPreviewVideo" class="w-100 h-100" controls></video>
+                    <h6 class="font-weight-bold mb-2">ویدیو</h6>
+                    <div class="embed-responsive embed-responsive-16by9 mb-2 d-none" id="modalPreviewVideoWrapper">
+                        <video id="modalPreviewVideo" class="embed-responsive-item" controls></video>
                     </div>
                     <p class="text-muted mb-0" id="modalPreviewVideoEmpty">ویدیویی پیوست نشده است.</p>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">بستن</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">بستن</button>
             </div>
         </div>
     </div>

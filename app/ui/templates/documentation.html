@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}مستندات پروژه{% endblock %}
+
+{% block page_header %}
+    <h1 class="m-0 text-dark"><i class="fas fa-book-open"></i> مستندات پروژه</h1>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body documentation-card">
+        <pre class="documentation-content">{{ spec_text | e }}</pre>
+    </div>
+</div>
+{% endblock %}

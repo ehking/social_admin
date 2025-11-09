@@ -110,14 +110,43 @@ def _read_key_from_file(path: str) -> bytes:
     return key
 
 
+def _write_key_to_file(path: str, key: bytes) -> bytes:
+    directory = os.path.dirname(path)
+    if directory:
+        try:
+            os.makedirs(directory, exist_ok=True)
+        except OSError as exc:  # pragma: no cover - defensive branch
+            raise EncryptionConfigurationError(
+                f"Unable to create directory for encryption key file: {directory}"
+            ) from exc
+
+    try:
+        with open(path, "xb") as key_file:
+            key_file.write(key + b"\n")
+    except FileExistsError:
+        return _read_key_from_file(path)
+    except OSError as exc:
+        raise EncryptionConfigurationError(
+            f"Unable to write encryption key file at path: {path}"
+        ) from exc
+
+    return key
+
+
 def _load_raw_key() -> bytes:
     env_key = os.getenv(_KEY_ENV_VAR)
     if env_key:
         key_bytes = env_key.strip().encode()
         return key_bytes
 
-    key_path = os.getenv(_KEY_PATH_ENV_VAR, _DEFAULT_KEY_PATH)
-    return _read_key_from_file(key_path)
+    key_path = os.path.expanduser(os.getenv(_KEY_PATH_ENV_VAR, _DEFAULT_KEY_PATH))
+    try:
+        return _read_key_from_file(key_path)
+    except EncryptionConfigurationError as exc:
+        if isinstance(exc.__cause__, FileNotFoundError):
+            generated_key = Fernet.generate_key()
+            return _write_key_to_file(key_path, generated_key)
+        raise
 
 
 @lru_cache(maxsize=1)
@@ -169,7 +198,38 @@ def decrypt_value(token: str) -> str:
     try:
         decrypted = cipher.decrypt(token.encode())
     except InvalidToken as exc:
+        if not _looks_like_encrypted_token(token):
+            return token
         raise EncryptionError("Failed to decrypt value: invalid token.") from exc
     except Exception as exc:  # pragma: no cover - defensive branch
         raise EncryptionError("Failed to decrypt value.") from exc
     return decrypted.decode()
+
+
+def _looks_like_encrypted_token(token: str) -> bool:
+    """Heuristic to detect if a string is likely an encrypted Fernet token."""
+
+    if not token:
+        return False
+
+    # Fernet tokens are url-safe base64 strings with a minimum length. They
+    # always encode the version byte 0x80, which results in a leading "g".
+    if len(token) < 16 or not token.startswith("g"):
+        return False
+
+    allowed = set(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+    token_bytes = token.encode()
+    if any(byte not in allowed for byte in token_bytes):
+        return False
+
+    # Ensure the value can be base64 decoded once padding is added. If this
+    # fails it's unlikely to be a Fernet token (e.g. legacy plaintext values).
+    padding = "=" * ((4 - len(token) % 4) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(token + padding)
+    except Exception:  # pragma: no cover - best-effort heuristic
+        return False
+
+    # A valid Fernet payload contains metadata (version, timestamp, IV, HMAC)
+    # and should therefore be reasonably long.
+    return len(decoded) >= 32

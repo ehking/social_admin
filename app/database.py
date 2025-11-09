@@ -28,12 +28,14 @@ def run_startup_migrations() -> None:
 
     columns = {column["name"] for column in inspector.get_columns("admin_users")}
     if "role" not in columns:
-        default_role = "admin"
+        default_role = "ADMIN"
         with engine.begin() as connection:
+            # SQLite does not support binding parameters in ALTER TABLE statements,
+            # so we inline the default value and then normalise existing rows.
             connection.execute(
                 text(
                     "ALTER TABLE admin_users ADD COLUMN role VARCHAR(50) "
-                    f"DEFAULT '{default_role}'"
+                    "DEFAULT 'ADMIN'"
                 )
             )
             connection.execute(

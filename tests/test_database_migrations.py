@@ -50,4 +50,4 @@ def test_run_startup_migrations_adds_missing_role_column(legacy_engine):
         role_value = connection.execute(
             text("SELECT role FROM admin_users WHERE username = 'legacy'")
         ).scalar_one()
-        assert role_value == "admin"
+        assert role_value == "ADMIN"

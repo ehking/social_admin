@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
 import tempfile
 import time
 from dataclasses import dataclass
@@ -31,6 +33,107 @@ from .worker import Worker
 from app.config import get_settings
 
 LOGGER = logging.getLogger(__name__)
+
+_CONCURRENCY_ENV_VAR = "TRENDING_PREVIEW_MAX_CONCURRENCY"
+_DEFAULT_MAX_CONCURRENCY = 3
+
+
+def _resolve_max_concurrency() -> int:
+    """Read the preview download concurrency from the environment."""
+
+    raw_value = os.getenv(_CONCURRENCY_ENV_VAR)
+    if raw_value is None:
+        return _DEFAULT_MAX_CONCURRENCY
+
+    try:
+        value = int(raw_value)
+    except ValueError:
+        LOGGER.warning(
+            "Invalid value for %s=%s. Falling back to default of %s.",
+            _CONCURRENCY_ENV_VAR,
+            raw_value,
+            _DEFAULT_MAX_CONCURRENCY,
+        )
+        return _DEFAULT_MAX_CONCURRENCY
+
+    if value < 1:
+        LOGGER.warning(
+            "Configured %s=%s is less than 1. Falling back to default of %s.",
+            _CONCURRENCY_ENV_VAR,
+            raw_value,
+            _DEFAULT_MAX_CONCURRENCY,
+        )
+        return _DEFAULT_MAX_CONCURRENCY
+
+    return value
+
+
+def _download_preview_to_path(track: "TrendingTrack", destination: Path) -> Path:
+    """Synchronous helper that streams a preview file to ``destination``."""
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    LOGGER.info("Downloading preview for \"%s\"", track.display_name)
+    with requests.get(track.preview_url, timeout=10, stream=True) as response:
+        response.raise_for_status()
+        with destination.open("wb") as handle:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    handle.write(chunk)
+    return destination
+
+
+class PreviewDownloadManager:
+    """Coordinate preview downloads with a configurable concurrency limit."""
+
+    def __init__(self, *, max_concurrency: int) -> None:
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be at least 1")
+        self._max_concurrency = max_concurrency
+        self._semaphore = asyncio.Semaphore(max_concurrency)
+
+    @property
+    def max_concurrency(self) -> int:
+        return self._max_concurrency
+
+    async def download(self, track: "TrendingTrack", *, destination: Path) -> Path:
+        """Download ``track``'s preview to ``destination`` respecting the limit."""
+
+        async with self._semaphore:
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(
+                None,
+                _download_preview_to_path,
+                track,
+                destination,
+            )
+
+    def download_sync(self, track: "TrendingTrack", *, destination: Path) -> Path:
+        """Synchronous wrapper that executes :meth:`download` on an event loop."""
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop in this thread – safe to create a temporary one.
+            return asyncio.run(self.download(track, destination=destination))
+
+        raise RuntimeError(
+            "download_sync() cannot be used while the current event loop is running. "
+            "Use the async download() API instead."
+        )
+
+
+_preview_download_manager: Optional[PreviewDownloadManager] = None
+
+
+def get_preview_download_manager() -> PreviewDownloadManager:
+    """Return a module-level :class:`PreviewDownloadManager` singleton."""
+
+    global _preview_download_manager
+    if _preview_download_manager is None:
+        _preview_download_manager = PreviewDownloadManager(
+            max_concurrency=_resolve_max_concurrency()
+        )
+    return _preview_download_manager
 
 
 @dataclass(slots=True)
@@ -195,17 +298,18 @@ class TrendingVideoCreator:
         return tracks
 
     @staticmethod
-    def download_preview(track: TrendingTrack, *, destination: Path) -> Path:
-        """Download the audio preview for a track."""
+    async def download_preview(track: TrendingTrack, *, destination: Path) -> Path:
+        """Download the audio preview for a track using the shared manager."""
 
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        LOGGER.info("Downloading preview for \"%s\"", track.display_name)
-        with request_with_backoff(track.preview_url, timeout=10, stream=True) as response:
-            with destination.open("wb") as handle:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        handle.write(chunk)
-        return destination
+        manager = get_preview_download_manager()
+        return await manager.download(track, destination=destination)
+
+    @staticmethod
+    def download_preview_sync(track: TrendingTrack, *, destination: Path) -> Path:
+        """Synchronous helper that leverages the shared download manager."""
+
+        manager = get_preview_download_manager()
+        return manager.download_sync(track, destination=destination)
 
     # ------------------------------------------------------------------
     # Text helpers
@@ -339,49 +443,8 @@ class TrendingVideoCreator:
 
         with self.worker.temporary_directory(prefix="trend-video-") as temp_dir:
             audio_path = Path(temp_dir) / "preview.m4a"
-            video_path = Path(temp_dir) / output_name
-            self.download_preview(track, destination=audio_path)
-            self.assemble_video(audio_path=audio_path, text=caption_text, output_path=video_path)
-
-            try:
-                upload_result = self.storage_service.upload_file(
-                    video_path,
-                    destination_name=output_name,
-                    content_type="video/mp4",
-                )
-                LOGGER.info(
-                    "Uploaded generated video for %s to storage key %s", track.display_name, upload_result.key
-                )
-                if self.db_session:
-                    job_media = self._record_job_media(job_name=resolved_job_name, upload_result=upload_result)
-                    self.db_session.commit()
-                    job_media_id = job_media.id
-            except Exception:
-                LOGGER.exception("Failed to persist generated video for job %s", resolved_job_name)
-                if self.db_session:
-                    self.db_session.rollback()
-                if upload_result:
-                    try:
-                        self.storage_service.delete_object(upload_result.key)
-                    except Exception:
-                        LOGGER.warning(
-                            "Failed to delete uploaded object %s during rollback", upload_result.key, exc_info=True
-                        )
-                raise
-            finally:
-                try:
-                    video_path.unlink(missing_ok=True)
-                except OSError:
-                    LOGGER.warning("Failed to remove temporary video file %s", video_path, exc_info=True)
-
-        if not upload_result:
-            raise StorageError("Upload did not complete for the generated video")
-
-        return GeneratedMedia(
-            storage_key=upload_result.key,
-            storage_url=upload_result.url,
-            job_media_id=job_media_id,
-        )
+            self.download_preview_sync(track, destination=audio_path)
+            return self.assemble_video(audio_path=audio_path, text=caption_text, output_path=output_path)
 
     # ------------------------------------------------------------------
     # Serialization helpers for inspection or caching

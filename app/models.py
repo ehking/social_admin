@@ -1,8 +1,35 @@
 from datetime import datetime
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from enum import Enum as PyEnum
+
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import TypeDecorator
 
 from .database import Base
+from .security.crypto import decrypt_value, encrypt_value
+
+
+class AdminRole(str, PyEnum):
+    SUPERADMIN = "superadmin"
+    ADMIN = "admin"
+    VIEWER = "viewer"
+
+
+class EncryptedText(TypeDecorator):
+    """SQLAlchemy type that transparently encrypts/decrypts values."""
+
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        return encrypt_value(value)
+
+    def process_result_value(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        return decrypt_value(value)
 
 
 class AdminUser(Base):
@@ -11,6 +38,7 @@ class AdminUser(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
+    role = Column(Enum(AdminRole, name="admin_role"), nullable=False, default=AdminRole.ADMIN)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -20,7 +48,7 @@ class ServiceToken(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     key = Column(String(100), nullable=False)
-    value = Column(Text, nullable=False)
+    value = Column(EncryptedText(), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 class SocialAccount(Base):
     __tablename__ = "social_accounts"

@@ -114,7 +114,6 @@ class TrendingVideoCreator:
         """Download the audio preview for a track."""
 
         destination.parent.mkdir(parents=True, exist_ok=True)
-        LOGGER.info("Downloading preview for \"%s\"", track.display_name)
         with requests.get(track.preview_url, timeout=10, stream=True) as response:
             response.raise_for_status()
             with destination.open("wb") as handle:
@@ -154,7 +153,13 @@ class TrendingVideoCreator:
             .set_position("center")
         )
 
-    def assemble_video(self, audio_path: Path, text: str, *, output_path: Path) -> Path:
+    def assemble_video(
+        self,
+        audio_path: Path,
+        text: str,
+        *,
+        output_path: Path,
+    ) -> Path:
         """Create a simple vertical video with the provided audio and caption."""
 
         audio_clip = AudioFileClip(str(audio_path))
@@ -169,7 +174,6 @@ class TrendingVideoCreator:
         video = CompositeVideoClip([background, caption]).set_audio(audio_clip)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        LOGGER.info("Rendering video to %s", output_path)
         video.write_videofile(  # type: ignore[no-untyped-call]
             str(output_path),
             fps=30,
@@ -230,10 +234,17 @@ class TrendingVideoCreator:
     ) -> GeneratedMedia:
         """Generate, upload, and register a captioned video for the provided track."""
 
+        caption_value = caption_template.format(track=track.display_name)
         if translate:
-            caption_text = self.translate_to_persian(caption_template.format(track=track.display_name))
+            caption_text = self.translate_to_persian(caption_value)
         else:
-            caption_text = self._normalize_persian_text(caption_template.format(track=track.display_name))
+            caption_text = self._normalize_persian_text(caption_value)
+
+        context_manager = (
+            nullcontext(job_ctx)
+            if job_ctx is not None
+            else job_context(media_id=media_id, campaign_id=campaign_id, log_dir=log_dir)
+        )
 
         resolved_job_name = job_name or self._default_job_name(track)
         output_name = self._derive_output_name(output_path, track)

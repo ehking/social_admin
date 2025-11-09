@@ -6,6 +6,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from . import models
+from .services import permissions as permissions_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -32,6 +33,7 @@ def get_logged_in_user(
     request: Request,
     db: Session,
     required_roles: Optional[Iterable[models.AdminRole]] = None,
+    required_menu: Optional[models.AdminMenu] = None,
 ) -> Optional[models.AdminUser]:
     user_id = request.session.get("user_id")
     if not user_id:
@@ -40,6 +42,12 @@ def get_logged_in_user(
     if not user:
         return None
     _ensure_role(user, required_roles)
+    if required_menu:
+        if not permissions_service.has_menu_access(db, user.role, required_menu):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: menu access is restricted.",
+            )
     return user
 
 
@@ -47,8 +55,14 @@ def require_user(
     request: Request,
     db: Session,
     required_roles: Optional[Iterable[models.AdminRole]] = None,
+    required_menu: Optional[models.AdminMenu] = None,
 ) -> models.AdminUser:
-    user = get_logged_in_user(request, db, required_roles=required_roles)
+    user = get_logged_in_user(
+        request,
+        db,
+        required_roles=required_roles,
+        required_menu=required_menu,
+    )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

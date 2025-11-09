@@ -8,8 +8,11 @@ from typing import Any, Dict
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 
 from app.backend import models
+
+from .helpers import build_layout_context
 
 
 @dataclass(slots=True)
@@ -19,16 +22,30 @@ class DocumentationPresenter:
     templates: Jinja2Templates
     spec_path: Path = field(default_factory=lambda: Path("docs/project_spec.md"))
 
-    def render(self, request: Request, user: models.AdminUser | None) -> object:
+    def render(
+        self,
+        request: Request,
+        user: models.AdminUser | None,
+        db: Session | None = None,
+    ) -> object:
         """Render the documentation page."""
 
         content = self._load_spec_text()
-        context: Dict[str, Any] = {
-            "request": request,
-            "user": user,
-            "spec_text": content,
-            "active_page": "documentation",
-        }
+        if db is not None and user is not None:
+            context: Dict[str, Any] = build_layout_context(
+                request=request,
+                user=user,
+                db=db,
+                active_page="documentation",
+                spec_text=content,
+            )
+        else:
+            context = {
+                "request": request,
+                "user": user,
+                "spec_text": content,
+                "active_page": "documentation",
+            }
         return self.templates.TemplateResponse("documentation.html", context)
 
     def _load_spec_text(self) -> str:

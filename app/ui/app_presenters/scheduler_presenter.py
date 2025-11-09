@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.backend import models
 
+from .helpers import build_layout_context
+
 
 @dataclass(slots=True)
 class SchedulerPresenter:
@@ -29,13 +31,14 @@ class SchedulerPresenter:
             .order_by(models.ScheduledPost.scheduled_time.desc())
             .all()
         )
-        context = {
-            "request": request,
-            "user": user,
-            "accounts": accounts,
-            "posts": posts,
-            "active_page": "scheduler",
-        }
+        context = build_layout_context(
+            request=request,
+            user=user,
+            db=db,
+            active_page="scheduler",
+            accounts=accounts,
+            posts=posts,
+        )
         return self.templates.TemplateResponse("scheduler.html", context)
 
     def create_schedule(
@@ -66,14 +69,15 @@ class SchedulerPresenter:
                 "Invalid schedule timestamp provided",
                 extra={"user_id": user.id, "account_id": account_id, "value": scheduled_time},
             )
-            context = {
-                "request": request,
-                "user": user,
-                "accounts": accounts,
-                "posts": posts,
-                "error": "فرمت تاریخ/زمان نامعتبر است.",
-                "active_page": "scheduler",
-            }
+            context = build_layout_context(
+                request=request,
+                user=user,
+                db=db,
+                active_page="scheduler",
+                accounts=accounts,
+                posts=posts,
+                error="فرمت تاریخ/زمان نامعتبر است.",
+            )
             return self.templates.TemplateResponse("scheduler.html", context, status_code=400)
 
         text_content = content.strip() or None if content else None

@@ -20,14 +20,19 @@
                     <span class="brand-subtitle">کنترل پنل مدیریت</span>
                 </div>
             </div>
+            {% set navigation = menu_items if menu_items is defined and menu_items else [
+                {'key': 'dashboard', 'label': 'داشبورد', 'url': '/'},
+                {'key': 'accounts', 'label': 'حساب‌ها', 'url': '/accounts'},
+                {'key': 'scheduler', 'label': 'زمان‌بندی محتوا', 'url': '/scheduler'},
+                {'key': 'manual_video', 'label': 'ویدیو دستی', 'url': '/manual-video'},
+                {'key': 'settings', 'label': 'تنظیمات', 'url': '/settings'},
+                {'key': 'documentation', 'label': 'مستندات', 'url': '/documentation'},
+                {'key': 'logs', 'label': 'لاگ‌ها', 'url': '/logs'}
+            ] %}
             <nav class="nav">
-                <a href="/" class="nav-link{% if active_page == 'dashboard' %} is-active{% endif %}">داشبورد</a>
-                <a href="/accounts" class="nav-link{% if active_page == 'accounts' %} is-active{% endif %}">حساب‌ها</a>
-                <a href="/scheduler" class="nav-link{% if active_page == 'scheduler' %} is-active{% endif %}">زمان‌بندی محتوا</a>
-                <a href="/manual-video" class="nav-link{% if active_page == 'manual_video' %} is-active{% endif %}">ویدیو دستی</a>
-                <a href="/settings" class="nav-link{% if active_page == 'settings' %} is-active{% endif %}">تنظیمات</a>
-                <a href="/documentation" class="nav-link{% if active_page == 'documentation' %} is-active{% endif %}">مستندات</a>
-                <a href="/logs" class="nav-link{% if active_page == 'logs' %} is-active{% endif %}">لاگ‌ها</a>
+                {% for item in navigation %}
+                    <a href="{{ item.url }}" class="nav-link{% if active_page == item.key %} is-active{% endif %}">{{ item.label }}</a>
+                {% endfor %}
             </nav>
             <footer class="sidebar-footer">
                 <span class="sidebar-version">نسخه ۲.۰</span>

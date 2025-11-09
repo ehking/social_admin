@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.backend import models
 
+from .helpers import build_layout_context
+
 
 @dataclass(slots=True)
 class AccountsPresenter:
@@ -27,12 +29,13 @@ class AccountsPresenter:
             .order_by(models.SocialAccount.created_at.desc())
             .all()
         )
-        context = {
-            "request": request,
-            "user": user,
-            "accounts": accounts,
-            "active_page": "accounts",
-        }
+        context = build_layout_context(
+            request=request,
+            user=user,
+            db=db,
+            active_page="accounts",
+            accounts=accounts,
+        )
         return self.templates.TemplateResponse("accounts.html", context)
 
     def account_form(
@@ -44,12 +47,13 @@ class AccountsPresenter:
         account_id: Optional[int] = None,
     ) -> object:
         account = db.get(models.SocialAccount, account_id) if account_id else None
-        context = {
-            "request": request,
-            "user": user,
-            "account": account,
-            "active_page": "accounts",
-        }
+        context = build_layout_context(
+            request=request,
+            user=user,
+            db=db,
+            active_page="accounts",
+            account=account,
+        )
         return self.templates.TemplateResponse("account_form.html", context)
 
     def save_account(

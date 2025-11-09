@@ -19,7 +19,12 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
 
     @router.get("/settings")
     async def settings(request: Request, db: Session = Depends(get_db)):
-        user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_roles=ADMIN_ROLES,
+            required_menu=models.AdminMenu.SETTINGS,
+        )
         if not user:
             return RedirectResponse(url="/login", status_code=302)
         return presenter.render(request, user, db)
@@ -32,7 +37,12 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         value: str = Form(...),
         db: Session = Depends(get_db),
     ):
-        user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_roles=ADMIN_ROLES,
+            required_menu=models.AdminMenu.SETTINGS,
+        )
         if not user:
             return RedirectResponse(url="/login", status_code=302)
         return presenter.save_token(db=db, user=user, name=name, key=key, value=value)
@@ -43,9 +53,27 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         token_id: int = Form(...),
         db: Session = Depends(get_db),
     ):
-        user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_roles=ADMIN_ROLES,
+            required_menu=models.AdminMenu.SETTINGS,
+        )
         if not user:
             return RedirectResponse(url="/login", status_code=302)
         return presenter.delete_token(db=db, user=user, token_id=token_id)
+
+    @router.post("/settings/permissions")
+    async def update_permissions(request: Request, db: Session = Depends(get_db)):
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_roles=[models.AdminRole.SUPERADMIN],
+            required_menu=models.AdminMenu.SETTINGS,
+        )
+        if not user:
+            return RedirectResponse(url="/login", status_code=302)
+        form_data = await request.form()
+        return presenter.update_permissions(db=db, user=user, form_data=form_data)
 
     return router

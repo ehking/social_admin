@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.backend import models
 from app.backend.services import create_job_with_media_and_campaign
 
+from .helpers import build_layout_context
+
 
 @dataclass(slots=True)
 class ManualVideoPresenter:
@@ -24,12 +26,13 @@ class ManualVideoPresenter:
 
     def render(self, request: Request, user: models.AdminUser, db: Session) -> object:
         jobs = db.query(models.Job).order_by(models.Job.created_at.desc()).all()
-        context = {
-            "request": request,
-            "user": user,
-            "jobs": jobs,
-            "active_page": "manual_video",
-        }
+        context = build_layout_context(
+            request=request,
+            user=user,
+            db=db,
+            active_page="manual_video",
+            jobs=jobs,
+        )
         return self.templates.TemplateResponse("manual_video.html", context)
 
     def create_manual_video(
@@ -56,13 +59,14 @@ class ManualVideoPresenter:
 
         if not clean_title or not clean_media_url or not clean_campaign_name:
             jobs = db.query(models.Job).order_by(models.Job.created_at.desc()).all()
-            context = {
-                "request": request,
-                "user": user,
-                "jobs": jobs,
-                "error": "عنوان، لینک ویدیو و نام کمپین الزامی هستند.",
-                "active_page": "manual_video",
-            }
+            context = build_layout_context(
+                request=request,
+                user=user,
+                db=db,
+                active_page="manual_video",
+                jobs=jobs,
+                error="عنوان، لینک ویدیو و نام کمپین الزامی هستند.",
+            )
             return self.templates.TemplateResponse(
                 "manual_video.html", context, status_code=400
             )
@@ -90,13 +94,14 @@ class ManualVideoPresenter:
                 "Validation error while creating manual video", extra={"error": str(exc)}
             )
             jobs = db.query(models.Job).order_by(models.Job.created_at.desc()).all()
-            context = {
-                "request": request,
-                "user": user,
-                "jobs": jobs,
-                "error": "ثبت ویدیو با خطا مواجه شد: " + str(exc),
-                "active_page": "manual_video",
-            }
+            context = build_layout_context(
+                request=request,
+                user=user,
+                db=db,
+                active_page="manual_video",
+                jobs=jobs,
+                error="ثبت ویدیو با خطا مواجه شد: " + str(exc),
+            )
             return self.templates.TemplateResponse(
                 "manual_video.html", context, status_code=400
             )

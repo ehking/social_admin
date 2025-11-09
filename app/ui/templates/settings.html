@@ -28,6 +28,52 @@
         </div>
     </form>
 </section>
+{% if role_definitions and menu_definitions %}
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>دسترسی به منوها</h2>
+            <p class="panel-description">کنترل کنید هر نقش به کدام بخش‌های پنل دسترسی داشته باشد</p>
+        </div>
+    </header>
+    <form method="post" action="/settings/permissions" class="form-grid">
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>منو</th>
+                        {% for role in role_definitions %}
+                            <th>{{ role.label }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for menu in menu_definitions %}
+                        <tr>
+                            <td>{{ menu.label }}</td>
+                            {% for role in role_definitions %}
+                                {% set field_name = 'perm-' ~ role.value ~ '-' ~ menu.key.value %}
+                                {% set role_permissions = permission_matrix.get(role.value, {}) %}
+                                {% set is_allowed = role_permissions.get(menu.key.value) %}
+                                <td class="text-center">
+                                    {% if role.editable %}
+                                        <input type="checkbox" id="{{ field_name }}" name="{{ field_name }}" value="1" {% if is_allowed %}checked{% endif %}>
+                                    {% else %}
+                                        <span class="badge badge-secondary">همیشه فعال</span>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn">ذخیره دسترسی‌ها</button>
+        </div>
+    </form>
+</section>
+{% endif %}
 <section class="panel">
     <header class="panel-header">
         <div>

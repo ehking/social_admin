@@ -40,6 +40,7 @@ except ImportError:  # pragma: no cover - fallback for test environments
 from app.backend import auth
 from app.backend.database import Base, SessionLocal, engine, run_startup_migrations
 from app.backend.monitoring import configure_monitoring
+from app.backend.services.permissions import ensure_default_permissions
 
 from .app_presenters.accounts_presenter import AccountsPresenter
 from .app_presenters.ai_presenter import AIVideoWorkflowPresenter
@@ -73,11 +74,12 @@ REQUEST_LATENCY = Histogram(
 )
 
 
-def _ensure_admin_user() -> None:
+def _initialize_admin_security() -> None:
     db = SessionLocal()
     try:
         auth.ensure_default_admin(db)
-        logger.info("Startup complete and default admin ensured.")
+        ensure_default_permissions(db)
+        logger.info("Startup complete and default access controls ensured.")
     finally:
         db.close()
 
@@ -138,6 +140,6 @@ def create_app() -> FastAPI:
     def on_startup() -> None:
         Base.metadata.create_all(bind=engine)
         run_startup_migrations()
-        _ensure_admin_user()
+        _initialize_admin_security()
 
     return app

@@ -39,7 +39,7 @@ def test_scheduler_template_renders_job_row():
         "<td>تیزر تابستانی</td>"\
         "\n                                <td>اکانت تست</td>"\
         f"\n                                <td>{scheduled_time.strftime('%Y-%m-%d %H:%M')}</td>"\
-        "\n                                <td><span class=\"badge badge-secondary text-uppercase\">pending</span></td>"
+        "\n                                <td><span class=\"badge badge-secondary\">pending</span></td>"
     )
 
     assert expected_snippet in html

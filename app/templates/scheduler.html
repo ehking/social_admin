@@ -3,7 +3,7 @@
 {% block content %}
 <div class="row g-4">
     <div class="col-lg-5">
-        <div class="card p-4">
+        <div class="card p-4 mb-4">
             <h2 class="h5 mb-3">افزودن پست زمان‌بندی شده</h2>
             {% if error %}
                 <div class="alert alert-danger">{{ error }}</div>
@@ -23,8 +23,13 @@
                     <input type="text" class="form-control" id="title" name="title" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label" for="content">متن یا توضیحات</label>
-                    <textarea class="form-control" id="content" name="content" rows="4" placeholder="متن کپشن یا یادداشت‌ها"></textarea>
+                    <label class="form-label" for="video_url">لینک ویدیو</label>
+                    <input type="url" class="form-control" id="video_url" name="video_url" placeholder="https://...">
+                    <div class="form-text">لینک مستقیم یا قابل پخش از ویدیوی مونتاژ شده را وارد کنید.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="content">سناریو یا توضیحات</label>
+                    <textarea class="form-control" id="content" name="content" rows="4" placeholder="جزئیات سناریو، کپشن یا یادداشت‌ها"></textarea>
                 </div>
                 <div class="mb-3">
                     <label class="form-label" for="scheduled_time">زمان انتشار</label>
@@ -32,6 +37,25 @@
                 </div>
                 <button type="submit" class="btn btn-primary">افزودن به صف</button>
             </form>
+        </div>
+        <div class="card p-4">
+            <h2 class="h5 mb-3">پیش‌نمایش سناریو و ویدیو</h2>
+            <div class="mb-3">
+                <h3 class="h6 text-muted mb-1">عنوان</h3>
+                <p class="mb-0 fw-semibold" id="previewTitle">—</p>
+            </div>
+            <div class="mb-4">
+                <h3 class="h6 text-muted mb-1">سناریو</h3>
+                <p class="scenario-preview mb-0 d-none" id="previewScenario"></p>
+                <p class="text-muted mb-0" id="previewScenarioEmpty">هنوز سناریویی نوشته نشده است.</p>
+            </div>
+            <div>
+                <h3 class="h6 text-muted mb-1">ویدیو</h3>
+                <div id="previewVideoWrapper" class="ratio ratio-16x9 mb-0 d-none">
+                    <video id="previewVideo" class="w-100 h-100" controls></video>
+                </div>
+                <p class="text-muted mb-0" id="previewVideoEmpty">لینکی برای پیش‌نمایش ویدیو وارد نشده است.</p>
+            </div>
         </div>
     </div>
     <div class="col-lg-7">
@@ -56,10 +80,25 @@
                             <td>{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td><span class="badge bg-secondary">{{ post.status }}</span></td>
                             <td>
-                                <form method="post" action="/scheduler/delete" onsubmit="return confirm('حذف این پست از صف؟');">
-                                    <input type="hidden" name="post_id" value="{{ post.id }}">
-                                    <button class="btn btn-sm btn-outline-danger" type="submit">حذف</button>
-                                </form>
+                                <div class="d-flex gap-2">
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#postPreviewModal"
+                                        data-title="{{ post.title }}"
+                                        data-account="{{ post.account.display_name }}"
+                                        data-time="{{ post.scheduled_time.strftime('%Y-%m-%d %H:%M') }}"
+                                        data-video="{{ (post.video_url or '')|e }}"
+                                        data-scenario="{{ (post.content or '')|e }}"
+                                    >
+                                        پیش‌نمایش
+                                    </button>
+                                    <form method="post" action="/scheduler/delete" onsubmit="return confirm('حذف این پست از صف؟');">
+                                        <input type="hidden" name="post_id" value="{{ post.id }}">
+                                        <button class="btn btn-sm btn-outline-danger" type="submit">حذف</button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     {% else %}
@@ -73,4 +112,156 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="postPreviewModal" tabindex="-1" aria-labelledby="postPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="postPreviewModalLabel">پیش‌نمایش پست</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="بستن"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <h6 class="fw-bold mb-1" id="modalPreviewTitle">—</h6>
+                    <p class="text-muted small mb-0" id="modalPreviewMeta"></p>
+                </div>
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-1">سناریو</h6>
+                    <p class="scenario-preview mb-0 d-none" id="modalPreviewScenario"></p>
+                    <p class="text-muted mb-0" id="modalPreviewScenarioEmpty">سناریویی برای این پست ثبت نشده است.</p>
+                </div>
+                <div>
+                    <h6 class="fw-bold mb-2">ویدیو</h6>
+                    <div class="ratio ratio-16x9 mb-2 d-none" id="modalPreviewVideoWrapper">
+                        <video id="modalPreviewVideo" class="w-100 h-100" controls></video>
+                    </div>
+                    <p class="text-muted mb-0" id="modalPreviewVideoEmpty">ویدیویی پیوست نشده است.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">بستن</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block body_extra %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const titleInput = document.getElementById('title');
+        const scenarioInput = document.getElementById('content');
+        const videoInput = document.getElementById('video_url');
+
+        if (!titleInput || !scenarioInput || !videoInput) {
+            return;
+        }
+
+        const previewTitle = document.getElementById('previewTitle');
+        const previewScenario = document.getElementById('previewScenario');
+        const previewScenarioEmpty = document.getElementById('previewScenarioEmpty');
+        const previewVideoWrapper = document.getElementById('previewVideoWrapper');
+        const previewVideo = document.getElementById('previewVideo');
+        const previewVideoEmpty = document.getElementById('previewVideoEmpty');
+
+        const updateTitle = () => {
+            const value = titleInput.value.trim();
+            previewTitle.textContent = value || '—';
+        };
+
+        const updateScenario = () => {
+            const value = scenarioInput.value.trim();
+            if (value) {
+                previewScenario.textContent = value;
+                previewScenario.classList.remove('d-none');
+                previewScenarioEmpty.classList.add('d-none');
+            } else {
+                previewScenario.textContent = '';
+                previewScenario.classList.add('d-none');
+                previewScenarioEmpty.classList.remove('d-none');
+            }
+        };
+
+        const clearVideoSource = (videoElement) => {
+            videoElement.pause();
+            videoElement.removeAttribute('src');
+            videoElement.load();
+        };
+
+        const updateVideo = () => {
+            const value = videoInput.value.trim();
+            if (value) {
+                previewVideo.src = value;
+                previewVideoWrapper.classList.remove('d-none');
+                previewVideo.classList.remove('d-none');
+                previewVideoEmpty.classList.add('d-none');
+            } else {
+                clearVideoSource(previewVideo);
+                previewVideoWrapper.classList.add('d-none');
+                previewVideo.classList.add('d-none');
+                previewVideoEmpty.classList.remove('d-none');
+            }
+        };
+
+        titleInput.addEventListener('input', updateTitle);
+        scenarioInput.addEventListener('input', updateScenario);
+        videoInput.addEventListener('input', updateVideo);
+
+        updateTitle();
+        updateScenario();
+        updateVideo();
+
+        const modalElement = document.getElementById('postPreviewModal');
+        if (modalElement) {
+            const modalScenario = document.getElementById('modalPreviewScenario');
+            const modalScenarioEmpty = document.getElementById('modalPreviewScenarioEmpty');
+            const modalTitle = document.getElementById('modalPreviewTitle');
+            const modalMeta = document.getElementById('modalPreviewMeta');
+            const modalVideo = document.getElementById('modalPreviewVideo');
+            const modalVideoWrapper = document.getElementById('modalPreviewVideoWrapper');
+            const modalVideoEmpty = document.getElementById('modalPreviewVideoEmpty');
+
+            modalElement.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                if (!button) {
+                    return;
+                }
+                const title = button.getAttribute('data-title') || '—';
+                const account = button.getAttribute('data-account') || '';
+                const time = button.getAttribute('data-time') || '';
+                const scenario = button.getAttribute('data-scenario') || '';
+                const video = button.getAttribute('data-video') || '';
+
+                modalTitle.textContent = title;
+                modalMeta.textContent = [account, time].filter(Boolean).join(' • ');
+
+                if (scenario.trim()) {
+                    modalScenario.textContent = scenario.trim();
+                    modalScenario.classList.remove('d-none');
+                    modalScenarioEmpty.classList.add('d-none');
+                } else {
+                    modalScenario.textContent = '';
+                    modalScenario.classList.add('d-none');
+                    modalScenarioEmpty.classList.remove('d-none');
+                }
+
+                if (video.trim()) {
+                    modalVideo.src = video.trim();
+                    modalVideoWrapper.classList.remove('d-none');
+                    modalVideoEmpty.classList.add('d-none');
+                } else {
+                    clearVideoSource(modalVideo);
+                    modalVideoWrapper.classList.add('d-none');
+                    modalVideoEmpty.classList.remove('d-none');
+                }
+            });
+
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                clearVideoSource(modalVideo);
+                modalVideoWrapper.classList.add('d-none');
+                modalVideoEmpty.classList.remove('d-none');
+            });
+        }
+    });
+</script>
 {% endblock %}

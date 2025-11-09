@@ -46,6 +46,7 @@ class ScheduledPost(Base):
     account_id = Column(Integer, ForeignKey("social_accounts.id"), nullable=False)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=True)
+    video_url = Column(String(500), nullable=True)
     scheduled_time = Column(DateTime, nullable=False)
     status = Column(String(50), default="pending")
 

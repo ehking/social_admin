@@ -46,6 +46,8 @@ from .app_presenters.ai_presenter import AIVideoWorkflowPresenter
 from .app_presenters.auth_presenter import AuthPresenter
 from .app_presenters.dashboard_presenter import DashboardPresenter
 from .app_presenters.documentation_presenter import DocumentationPresenter
+from .app_presenters.logs_presenter import LogsPresenter
+from .app_presenters.manual_video_presenter import ManualVideoPresenter
 from .app_presenters.scheduler_presenter import SchedulerPresenter
 from .app_presenters.settings_presenter import SettingsPresenter
 from .views import (
@@ -55,6 +57,8 @@ from .views import (
     dashboard,
     documentation,
     metrics,
+    manual_video,
+    logs,
     scheduler,
     settings,
 )
@@ -94,7 +98,8 @@ def create_app() -> FastAPI:
     scheduler_presenter = SchedulerPresenter(templates)
     documentation_presenter = DocumentationPresenter(templates)
     ai_presenter = AIVideoWorkflowPresenter()
-    documentation_presenter = DocumentationPresenter(templates)
+    manual_video_presenter = ManualVideoPresenter(templates)
+    logs_presenter = LogsPresenter(templates)
 
     app.include_router(auth_views.create_router(auth_presenter))
     app.include_router(dashboard.create_router(dashboard_presenter))

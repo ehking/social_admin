@@ -1,18 +1,104 @@
+@import url('https://cdn.jsdelivr.net/npm/vazirmatn@33.0.2/Vazirmatn-font-face.css');
+
+:root {
+    --sa-primary: #6366f1;
+    --sa-primary-light: rgba(99, 102, 241, 0.12);
+    --sa-dark: #0f172a;
+}
+
 body {
-    background-color: #f4f6f9;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
     font-family: "Vazirmatn", "IRANSans", sans-serif;
+    color: #1e293b;
+}
+
+.wrapper {
+    min-height: 100vh;
+}
+
+.content-wrapper {
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(6px);
+    border-radius: 1.25rem 0 0 1.25rem;
+    box-shadow: -1rem 0 2.5rem rgba(15, 23, 42, 0.08);
+}
+
+.content-header {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.content-header h1 {
+    font-weight: 700;
+    color: var(--sa-dark);
 }
 
 .main-header .btn {
     font-weight: 600;
 }
 
-.brand-link {
-    font-weight: 700;
+.main-header.navbar {
+    border: none;
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 1rem 3rem rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(8px);
 }
 
-.content-header h1 {
-    font-weight: 600;
+.main-header .nav-link,
+.main-header .btn {
+    color: var(--sa-dark);
+}
+
+.brand-link {
+    font-weight: 700;
+    font-size: 1.25rem;
+    letter-spacing: -0.01em;
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    color: #f8fafc !important;
+}
+
+.main-sidebar {
+    background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+}
+
+.main-sidebar .nav-sidebar {
+    margin-top: 1.5rem;
+}
+
+.main-sidebar .user-panel,
+.main-sidebar .brand-link {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.nav-sidebar .nav-item {
+    margin: 0.35rem 0.75rem;
+}
+
+.nav-sidebar .nav-link {
+    border-radius: 1rem;
+    padding: 0.85rem 1.15rem;
+    font-weight: 500;
+    transition: background-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+    color: rgba(248, 250, 252, 0.88);
+}
+
+.nav-sidebar .nav-link i {
+    font-size: 1.1rem;
+    margin-left: 0.75rem;
+    color: rgba(226, 232, 240, 0.9);
+}
+
+.nav-sidebar .nav-link.active,
+.nav-sidebar .nav-link:hover {
+    background-color: var(--sa-primary-light);
+    color: #ffffff;
+    box-shadow: inset -0.35rem 0 0 var(--sa-primary);
+    transform: translateX(-4px);
+}
+
+.nav-sidebar .nav-link.active i,
+.nav-sidebar .nav-link:hover i {
+    color: #ffffff;
 }
 
 .card {
@@ -31,6 +117,10 @@ body {
 .table thead th {
     background-color: #eef1f6;
     font-weight: 600;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(99, 102, 241, 0.08);
 }
 
 textarea.form-control {
@@ -73,4 +163,21 @@ textarea.form-control {
 .embed-responsive video {
     width: 100%;
     height: 100%;
+}
+
+.main-footer {
+    background: transparent;
+    border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+@media (max-width: 991.98px) {
+    .content-wrapper {
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .nav-sidebar .nav-link {
+        transform: none !important;
+        box-shadow: none !important;
+    }
 }

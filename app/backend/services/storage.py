@@ -22,6 +22,10 @@ class StorageResult:
     key: str
     url: str | None = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.key, str) or not self.key.strip():
+            raise StorageError("Storage key must be a non-empty string")
+
 
 class StorageService(Protocol):
     """Minimal protocol implemented by storage services."""

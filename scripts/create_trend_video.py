@@ -83,6 +83,8 @@ def main() -> None:
         LOGGER.info("Storage URL: %s", result.storage_url)
     if result.job_media_id is not None:
         LOGGER.info("Recorded JobMedia row with id %s", result.job_media_id)
+    if result.local_path is not None:
+        LOGGER.info("Local copy saved to %s", result.local_path)
 
 
 if __name__ == "__main__":

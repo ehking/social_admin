@@ -183,3 +183,18 @@ def test_generate_trend_video_creates_local_copy(monkeypatch, tmp_path):
     assert result.storage_url == "http://storage/custom-name.mp4"
     assert result.job_media_id is None
     assert result.local_path == output_path.resolve()
+
+
+def test_default_job_name_handles_missing_metadata():
+    track = TrendingTrack(title="", artist="", preview_url="")
+
+    job_name = TrendingVideoCreator._default_job_name(track)
+
+    assert job_name.startswith("trend-video:")
+    assert job_name != "trend-video:"
+
+
+def test_display_name_falls_back_to_preview_url():
+    track = TrendingTrack(title="", artist="", preview_url="https://example")
+
+    assert track.display_name == "https://example"

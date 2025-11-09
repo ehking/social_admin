@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
-from app.config import AppSettings, get_settings
+from ..config import AppSettings, get_settings
 
 
 class StorageError(RuntimeError):

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app.monitoring import MonitoringConfigError, configure_monitoring
+from app.backend.monitoring import MonitoringConfigError, configure_monitoring
 
 
 def test_configure_monitoring_adds_metrics_endpoint(monkeypatch):

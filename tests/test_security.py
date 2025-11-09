@@ -11,9 +11,9 @@ from starlette.requests import Request
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app import auth, models
-from app.database import Base
-from app.security import crypto
+from app.backend import auth, models
+from app.backend.database import Base
+from app.backend.security import crypto
 
 
 @pytest.fixture(autouse=True)

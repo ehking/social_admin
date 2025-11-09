@@ -22,7 +22,7 @@ def test_scheduler_template_renders_job_row():
     )
 
     env = Environment(
-        loader=FileSystemLoader("app/templates"),
+        loader=FileSystemLoader("app/ui/templates"),
         autoescape=select_autoescape(["html", "xml"]),
     )
     env.globals["url_for"] = lambda name, **kwargs: f"/static/{kwargs.get('path', '')}"

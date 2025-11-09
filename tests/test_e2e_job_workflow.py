@@ -12,8 +12,8 @@ from sqlalchemy.orm import sessionmaker
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app import auth, models
-from app.database import Base, get_db
+from app.backend import auth, models
+from app.backend.database import Base, get_db
 from app.main import app
 
 

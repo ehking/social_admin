@@ -1,4 +1,4 @@
-"""Documentation view routes."""
+"""Routes serving the internal project documentation."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from ..app_presenters.documentation_presenter import DocumentationPresenter
 def create_router(presenter: DocumentationPresenter) -> APIRouter:
     router = APIRouter()
 
-    @router.get("/docs")
+    @router.get("/documentation")
     async def documentation(request: Request, db: Session = Depends(get_db)):
         user = auth.get_logged_in_user(request, db)
         if not user:

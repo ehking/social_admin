@@ -165,17 +165,15 @@ textarea.form-control {
     height: 100%;
 }
 
-.log-entry-list pre {
-    direction: ltr;
-    text-align: left;
+.documentation-card {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.documentation-content {
     white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.log-entry-list li {
-    transition: box-shadow 0.2s ease-in-out;
-}
-
-.log-entry-list li:hover {
-    box-shadow: 0 0.5rem 1rem rgba(31, 45, 61, 0.08);
+    direction: ltr;
+    font-family: "Vazirmatn", "IRANSans", monospace;
+    font-size: 0.95rem;
+    line-height: 1.6;
 }

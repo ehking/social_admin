@@ -45,7 +45,7 @@ from .app_presenters.accounts_presenter import AccountsPresenter
 from .app_presenters.ai_presenter import AIVideoWorkflowPresenter
 from .app_presenters.auth_presenter import AuthPresenter
 from .app_presenters.dashboard_presenter import DashboardPresenter
-from .app_presenters.manual_video_presenter import ManualVideoPresenter
+from .app_presenters.documentation_presenter import DocumentationPresenter
 from .app_presenters.scheduler_presenter import SchedulerPresenter
 from .app_presenters.settings_presenter import SettingsPresenter
 from .views import (
@@ -53,7 +53,7 @@ from .views import (
     ai,
     auth as auth_views,
     dashboard,
-    manual_video,
+    documentation,
     metrics,
     scheduler,
     settings,
@@ -92,7 +92,7 @@ def create_app() -> FastAPI:
     settings_presenter = SettingsPresenter(templates)
     accounts_presenter = AccountsPresenter(templates)
     scheduler_presenter = SchedulerPresenter(templates)
-    manual_video_presenter = ManualVideoPresenter(templates)
+    documentation_presenter = DocumentationPresenter(templates)
     ai_presenter = AIVideoWorkflowPresenter()
     documentation_presenter = DocumentationPresenter(templates)
 

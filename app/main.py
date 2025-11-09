@@ -13,11 +13,14 @@ from fastapi.responses import JSONResponse
 from . import auth, models
 from .ai_workflow import get_ai_video_workflow
 from .database import Base, SessionLocal, engine, get_db
+from .monitoring import configure_monitoring
 
 app = FastAPI(title="Social Admin")
 app.add_middleware(SessionMiddleware, secret_key="super-secret-session-key")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+
+configure_monitoring(app)
 
 
 @app.on_event("startup")

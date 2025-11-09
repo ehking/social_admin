@@ -44,7 +44,10 @@ class JobService:
 
                 for payload in media_payloads:
                     self._validate_media_payload(payload)
-                    media = JobMedia(job=job, **payload)
+                    media_data = dict(payload)
+                    if not media_data.get("job_name"):
+                        media_data["job_name"] = job.title
+                    media = JobMedia(job=job, **media_data)
                     session.add(media)
 
                 self._validate_campaign_payload(campaign_payload)

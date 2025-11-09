@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -14,14 +16,20 @@ from ..app_presenters.settings_presenter import SettingsPresenter
 ADMIN_ROLES = [models.AdminRole.ADMIN, models.AdminRole.SUPERADMIN]
 
 
+logger = logging.getLogger(__name__)
+
+
 def create_router(presenter: SettingsPresenter) -> APIRouter:
     router = APIRouter()
 
     @router.get("/settings")
     async def settings(request: Request, db: Session = Depends(get_db)):
+        logger.info("Settings page requested")
         user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
         if not user:
+            logger.info("Settings access denied for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
+        logger.info("Rendering settings page", extra={"user_id": user.id})
         return presenter.render(request, user, db)
 
     @router.post("/settings")
@@ -32,9 +40,15 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         value: str = Form(...),
         db: Session = Depends(get_db),
     ):
+        logger.info("Token save requested", extra={"token_name": name})
         user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
         if not user:
+            logger.info("Token save denied for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
+        logger.info(
+            "Saving integration token",
+            extra={"user_id": user.id, "token_name": name},
+        )
         return presenter.save_token(db=db, user=user, name=name, key=key, value=value)
 
     @router.post("/settings/delete")
@@ -43,9 +57,15 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         token_id: int = Form(...),
         db: Session = Depends(get_db),
     ):
+        logger.info("Token delete requested", extra={"token_id": token_id})
         user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
         if not user:
+            logger.info("Token delete denied for unauthenticated user", extra={"token_id": token_id})
             return RedirectResponse(url="/login", status_code=302)
+        logger.info(
+            "Deleting integration token",
+            extra={"user_id": user.id, "token_id": token_id},
+        )
         return presenter.delete_token(db=db, user=user, token_id=token_id)
 
     return router

@@ -16,7 +16,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 
 from . import auth, models
 from .ai_workflow import get_ai_video_workflow
-from .database import Base, SessionLocal, engine, get_db
+from .database import Base, SessionLocal, engine, get_db, run_startup_migrations
 from .monitoring import configure_monitoring
 
 app = FastAPI(title="Social Admin")
@@ -53,6 +53,7 @@ async def metrics_middleware(request: Request, call_next):
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    run_startup_migrations()
     db = SessionLocal()
     try:
         auth.ensure_default_admin(db)

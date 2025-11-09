@@ -1,0 +1,59 @@
+"""CLI utility for producing a short vertical video with trending audio and Persian captions."""
+
+from __future__ import annotations
+
+import argparse
+import logging
+from pathlib import Path
+
+from app.services import TrendingVideoCreator
+
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+LOGGER = logging.getLogger(__name__)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("font", type=Path, help="Path to a Nastaliq (or compatible) font file")
+    parser.add_argument("output", type=Path, help="Path for the rendered video (mp4)")
+    parser.add_argument("--country", default="us", help="Apple Music store country code (default: us)")
+    parser.add_argument("--limit", type=int, default=5, help="Number of trending tracks to fetch")
+    parser.add_argument("--index", type=int, default=0, help="Index of the track to render (default: 0)")
+    parser.add_argument(
+        "--caption",
+        default="بهترین ترند این هفته: {track}",
+        help="Caption template. Use {track} as placeholder for title and artist.",
+    )
+    parser.add_argument(
+        "--no-translate",
+        action="store_true",
+        help="Disable automatic translation (expects Persian text in caption).",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    LOGGER.info("Fetching top %s tracks for %s", args.limit, args.country.upper())
+    tracks = TrendingVideoCreator.fetch_trending_tracks(country=args.country, limit=args.limit)
+    if not tracks:
+        raise SystemExit("No tracks found. Try a different country or limit.")
+
+    try:
+        track = tracks[args.index]
+    except IndexError as exc:  # pragma: no cover - guard clause
+        raise SystemExit(f"Track index {args.index} is out of range for {len(tracks)} tracks") from exc
+
+    LOGGER.info("Selected track: %s", track.display_name)
+    creator = TrendingVideoCreator(font_path=args.font)
+    creator.generate_trend_video(
+        track=track,
+        caption_template=args.caption,
+        output_path=args.output,
+        translate=not args.no_translate,
+    )
+    LOGGER.info("Video successfully rendered to %s", args.output)
+
+
+if __name__ == "__main__":
+    main()

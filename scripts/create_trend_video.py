@@ -6,9 +6,9 @@ import argparse
 import logging
 from pathlib import Path
 
-from app.config import get_settings
-from app.database import SessionLocal
-from app.services import TrendingVideoCreator, Worker, get_storage_service
+from app.backend.config import get_settings
+from app.backend.database import SessionLocal
+from app.backend.services import TrendingVideoCreator, Worker, get_storage_service
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 LOGGER = logging.getLogger(__name__)

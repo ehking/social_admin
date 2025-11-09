@@ -6,6 +6,7 @@ import logging
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +53,11 @@ class AppSettings:
     """Top level configuration container for the application."""
 
     trending_request_backoff: TrendingRequestBackoff
+    storage_backend: str
+    storage_local_base_path: Path
+    storage_s3_bucket: str | None
+    storage_s3_prefix: str | None
+    worker_temp_dir: Path
 
     @classmethod
     def load(cls) -> "AppSettings":
@@ -64,12 +70,25 @@ class AppSettings:
                 min_seconds,
             )
             max_seconds = min_seconds
+        storage_backend = os.getenv("STORAGE_BACKEND", "local").lower()
+        storage_local_base_path = Path(
+            os.getenv("STORAGE_LOCAL_BASE_PATH", "./storage")
+        )
+        storage_s3_bucket = os.getenv("STORAGE_S3_BUCKET") or None
+        storage_s3_prefix = os.getenv("STORAGE_S3_PREFIX") or None
+        worker_temp_dir = Path(os.getenv("WORKER_TEMP_DIR", "./tmp/worker"))
+
         return cls(
             trending_request_backoff=TrendingRequestBackoff(
                 max_attempts=_read_int("TRENDING_REQUEST_MAX_ATTEMPTS", 5),
                 min_seconds=min_seconds,
                 max_seconds=max_seconds,
-            )
+            ),
+            storage_backend=storage_backend,
+            storage_local_base_path=storage_local_base_path,
+            storage_s3_bucket=storage_s3_bucket,
+            storage_s3_prefix=storage_s3_prefix,
+            worker_temp_dir=worker_temp_dir,
         )
 
 

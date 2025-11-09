@@ -24,13 +24,12 @@ from moviepy.editor import (
 )
 from sqlalchemy.orm import Session
 
-from app import models
-from app.config import AppSettings, get_settings
+from .. import models
+from ..config import AppSettings, get_settings
 
 from .storage import StorageResult, StorageService, StorageError, get_storage_service
 from .worker import Worker
 
-from app.config import get_settings
 
 LOGGER = logging.getLogger(__name__)
 

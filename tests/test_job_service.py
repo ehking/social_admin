@@ -5,9 +5,9 @@ import pytest
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app.database import Base, SessionLocal, engine
-from app.models import Campaign, Job, JobMedia
-from app.services import create_job_with_media_and_campaign
+from app.backend.database import Base, SessionLocal, engine
+from app.backend.models import Campaign, Job, JobMedia
+from app.backend.services import create_job_with_media_and_campaign
 
 
 @pytest.fixture(autouse=True)

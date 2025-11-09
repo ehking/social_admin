@@ -6,8 +6,8 @@ from typing import Iterable, Mapping
 
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
-from app.models import Campaign, Job, JobMedia
+from ..database import SessionLocal
+from ..models import Campaign, Job, JobMedia
 
 
 def _validate_media_payload(media_payload: Mapping[str, object]) -> None:

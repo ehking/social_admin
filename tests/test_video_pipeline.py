@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app.services import trending_video
-from app.services.trending_video import TrendingVideoCreator
+from app.backend.services import trending_video
+from app.backend.services.trending_video import TrendingVideoCreator
 
 
 DUMMY_DURATION = 4.25

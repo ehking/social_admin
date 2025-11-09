@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app import database
+from app.backend import database
 
 
 @pytest.fixture

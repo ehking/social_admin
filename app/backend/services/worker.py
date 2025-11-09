@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from app.config import AppSettings, get_settings
+from ..config import AppSettings, get_settings
 
 
 class Worker:

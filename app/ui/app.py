@@ -47,7 +47,17 @@ from .app_presenters.auth_presenter import AuthPresenter
 from .app_presenters.dashboard_presenter import DashboardPresenter
 from .app_presenters.scheduler_presenter import SchedulerPresenter
 from .app_presenters.settings_presenter import SettingsPresenter
-from .views import accounts, ai, auth as auth_views, dashboard, metrics, scheduler, settings
+from .app_presenters.logs_presenter import LogsPresenter
+from .views import (
+    accounts,
+    ai,
+    auth as auth_views,
+    dashboard,
+    logs,
+    metrics,
+    scheduler,
+    settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +92,7 @@ def create_app() -> FastAPI:
     settings_presenter = SettingsPresenter(templates)
     accounts_presenter = AccountsPresenter(templates)
     scheduler_presenter = SchedulerPresenter(templates)
+    logs_presenter = LogsPresenter(templates)
     ai_presenter = AIVideoWorkflowPresenter()
 
     app.include_router(auth_views.create_router(auth_presenter))
@@ -91,6 +102,7 @@ def create_app() -> FastAPI:
     app.include_router(scheduler.create_router(scheduler_presenter))
     app.include_router(ai.create_router(ai_presenter))
     app.include_router(metrics.create_router())
+    app.include_router(logs.create_router(logs_presenter))
 
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):

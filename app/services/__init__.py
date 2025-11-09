@@ -1,10 +1,15 @@
 """Utility services for multimedia workflows."""
 
-from .job_service import create_job_with_media_and_campaign
-from .trending_video import TrendingTrack, TrendingVideoCreator
+from .storage import StorageResult, StorageService, get_storage_service
+from .trending_video import GeneratedMedia, TrendingTrack, TrendingVideoCreator
+from .worker import Worker
 
 __all__ = [
+    "GeneratedMedia",
+    "StorageResult",
+    "StorageService",
     "TrendingTrack",
     "TrendingVideoCreator",
-    "create_job_with_media_and_campaign",
+    "Worker",
+    "get_storage_service",
 ]

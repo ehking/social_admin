@@ -81,41 +81,12 @@ class ScheduledPost(Base):
     account = relationship("SocialAccount", back_populates="scheduled_posts")
 
 
-class Job(Base):
-    __tablename__ = "jobs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    media_items = relationship(
-        "JobMedia", back_populates="job", cascade="all, delete-orphan"
-    )
-    campaigns = relationship(
-        "Campaign", back_populates="job", cascade="all, delete-orphan"
-    )
-
-
 class JobMedia(Base):
     __tablename__ = "job_media"
 
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
-    media_type = Column(String(50), nullable=False)
-    media_url = Column(String(500), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    job = relationship("Job", back_populates="media_items")
-
-
-class Campaign(Base):
-    __tablename__ = "campaigns"
-
-    id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
-    name = Column(String(200), nullable=False)
-    status = Column(String(50), default="draft")
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    job = relationship("Job", back_populates="campaigns")
+    job_name = Column(String(100), nullable=False)
+    media_type = Column(String(50), nullable=False, default="video/mp4")
+    storage_key = Column(String(255), nullable=False)
+    storage_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

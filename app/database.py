@@ -26,21 +26,28 @@ def run_startup_migrations() -> None:
     if "admin_users" not in inspector.get_table_names():
         return
 
+    from .models import AdminRole  # imported lazily to avoid circular dependency
+
+    default_role = AdminRole.ADMIN.name
     columns = {column["name"] for column in inspector.get_columns("admin_users")}
-    if "role" not in columns:
-        default_role = "ADMIN"
-        with engine.begin() as connection:
-            # SQLite does not support binding parameters in ALTER TABLE statements,
-            # so we inline the default value and then normalise existing rows.
+
+    with engine.begin() as connection:
+        if "role" not in columns:
             connection.execute(
                 text(
                     "ALTER TABLE admin_users ADD COLUMN role VARCHAR(50) "
-                    "DEFAULT 'ADMIN'"
+                    f"DEFAULT '{default_role}'"
                 )
             )
+
+        # Ensure legacy values use the canonical enum names expected by SQLAlchemy
+        for role in AdminRole:
             connection.execute(
-                text(
-                    "UPDATE admin_users SET role = :default_role WHERE role IS NULL"
-                ),
-                {"default_role": default_role},
+                text("UPDATE admin_users SET role = :canonical WHERE role = :legacy"),
+                {"canonical": role.name, "legacy": role.value},
             )
+
+        connection.execute(
+            text("UPDATE admin_users SET role = :default_role WHERE role IS NULL"),
+            {"default_role": default_role},
+        )

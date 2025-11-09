@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -19,6 +18,13 @@ from moviepy.editor import (
     CompositeVideoClip,
     TextClip,
 )
+from sqlalchemy.orm import Session
+
+from app import models
+from app.config import AppSettings, get_settings
+
+from .storage import StorageResult, StorageService, StorageError, get_storage_service
+from .worker import Worker
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +42,15 @@ class TrendingTrack:
         return f"{self.title} — {self.artist}" if self.artist else self.title
 
 
+@dataclass(slots=True)
+class GeneratedMedia:
+    """Result metadata returned after generating and uploading a video."""
+
+    storage_key: str
+    storage_url: str | None
+    job_media_id: int | None = None
+
+
 class TrendingVideoCreator:
     """High level helper for creating captioned videos with trending audio previews."""
 
@@ -47,6 +62,10 @@ class TrendingVideoCreator:
         height: int = 1920,
         background_color: tuple[int, int, int] = (0, 0, 0),
         translator: Optional[GoogleTranslator] = None,
+        worker: Worker | None = None,
+        storage_service: StorageService | None = None,
+        db_session: Session | None = None,
+        settings: AppSettings | None = None,
     ) -> None:
         self.font_path = Path(font_path)
         if not self.font_path.exists():
@@ -56,6 +75,10 @@ class TrendingVideoCreator:
         self.height = height
         self.background_color = background_color
         self.translator = translator or GoogleTranslator(source="auto", target="fa")
+        self.settings = settings or get_settings()
+        self.worker = worker or Worker(settings=self.settings)
+        self.storage_service = storage_service or get_storage_service(self.settings)
+        self.db_session = db_session
 
     # ------------------------------------------------------------------
     # Data acquisition helpers
@@ -158,6 +181,42 @@ class TrendingVideoCreator:
         return output_path
 
     # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _sanitize_filename(name: str) -> str:
+        safe_chars = [char if char.isalnum() or char in {"-", "_"} else "-" for char in name]
+        sanitized = "".join(safe_chars).strip("-_")
+        return sanitized or "trend-video"
+
+    @classmethod
+    def _derive_output_name(cls, output_path: Path | None, track: TrendingTrack) -> str:
+        if output_path:
+            base = Path(output_path).stem
+        else:
+            base = track.title or "trend-video"
+            if track.artist:
+                base = f"{base}-{track.artist}"
+        sanitized = cls._sanitize_filename(base)
+        return f"{sanitized}.mp4"
+
+    @staticmethod
+    def _default_job_name(track: TrendingTrack) -> str:
+        return f"trend-video:{track.display_name}"
+
+    def _record_job_media(self, *, job_name: str, upload_result: StorageResult) -> models.JobMedia:
+        if not self.db_session:
+            raise RuntimeError("Database session is required to record job media")
+        job_media = models.JobMedia(
+            job_name=job_name,
+            media_type="video/mp4",
+            storage_key=upload_result.key,
+            storage_url=upload_result.url,
+        )
+        self.db_session.add(job_media)
+        return job_media
+
+    # ------------------------------------------------------------------
     # High-level orchestration
     # ------------------------------------------------------------------
     def generate_trend_video(
@@ -165,20 +224,68 @@ class TrendingVideoCreator:
         *,
         track: TrendingTrack,
         caption_template: str,
-        output_path: Path,
+        output_path: Path | None = None,
         translate: bool = True,
-    ) -> Path:
-        """Generate a captioned video for the provided track."""
+        job_name: str | None = None,
+    ) -> GeneratedMedia:
+        """Generate, upload, and register a captioned video for the provided track."""
 
         if translate:
             caption_text = self.translate_to_persian(caption_template.format(track=track.display_name))
         else:
             caption_text = self._normalize_persian_text(caption_template.format(track=track.display_name))
 
-        with tempfile.TemporaryDirectory() as temp_dir:
+        resolved_job_name = job_name or self._default_job_name(track)
+        output_name = self._derive_output_name(output_path, track)
+
+        upload_result: StorageResult | None = None
+        job_media_id: int | None = None
+
+        with self.worker.temporary_directory(prefix="trend-video-") as temp_dir:
             audio_path = Path(temp_dir) / "preview.m4a"
+            video_path = Path(temp_dir) / output_name
             self.download_preview(track, destination=audio_path)
-            return self.assemble_video(audio_path=audio_path, text=caption_text, output_path=output_path)
+            self.assemble_video(audio_path=audio_path, text=caption_text, output_path=video_path)
+
+            try:
+                upload_result = self.storage_service.upload_file(
+                    video_path,
+                    destination_name=output_name,
+                    content_type="video/mp4",
+                )
+                LOGGER.info(
+                    "Uploaded generated video for %s to storage key %s", track.display_name, upload_result.key
+                )
+                if self.db_session:
+                    job_media = self._record_job_media(job_name=resolved_job_name, upload_result=upload_result)
+                    self.db_session.commit()
+                    job_media_id = job_media.id
+            except Exception:
+                LOGGER.exception("Failed to persist generated video for job %s", resolved_job_name)
+                if self.db_session:
+                    self.db_session.rollback()
+                if upload_result:
+                    try:
+                        self.storage_service.delete_object(upload_result.key)
+                    except Exception:
+                        LOGGER.warning(
+                            "Failed to delete uploaded object %s during rollback", upload_result.key, exc_info=True
+                        )
+                raise
+            finally:
+                try:
+                    video_path.unlink(missing_ok=True)
+                except OSError:
+                    LOGGER.warning("Failed to remove temporary video file %s", video_path, exc_info=True)
+
+        if not upload_result:
+            raise StorageError("Upload did not complete for the generated video")
+
+        return GeneratedMedia(
+            storage_key=upload_result.key,
+            storage_url=upload_result.url,
+            job_media_id=job_media_id,
+        )
 
     # ------------------------------------------------------------------
     # Serialization helpers for inspection or caching

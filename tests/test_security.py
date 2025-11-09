@@ -17,7 +17,13 @@ from app.backend.security import crypto
 
 
 @pytest.fixture(autouse=True)
-def configure_fernet_key(monkeypatch):
+def configure_fernet_key(monkeypatch, request):
+    if request.node.get_closest_marker("no_fernet_autoconfig"):
+        crypto.reset_cipher_cache()
+        yield
+        crypto.reset_cipher_cache()
+        return
+
     key = base64.urlsafe_b64encode(os.urandom(32)).decode()
     monkeypatch.setenv("FERNET_KEY", key)
     crypto.reset_cipher_cache()
@@ -55,6 +61,13 @@ def test_service_token_value_encrypted_in_database(session_factory):
         session.close()
 
 
+def test_decrypt_plaintext_legacy_value_returns_original():
+    legacy_value = "plain-text-secret"
+
+    # Simulate a database record created before encryption was introduced.
+    assert crypto.decrypt_value(legacy_value) == legacy_value
+
+
 def test_viewer_role_cannot_access_admin_only_section(session_factory):
     session = session_factory()
     try:
@@ -89,3 +102,17 @@ def test_viewer_role_cannot_access_admin_only_section(session_factory):
         assert exc_info.value.status_code == 403
     finally:
         session.close()
+
+
+@pytest.mark.no_fernet_autoconfig
+def test_missing_key_file_is_created(tmp_path, monkeypatch):
+    monkeypatch.delenv("FERNET_KEY", raising=False)
+    key_path = tmp_path / "config" / "fernet.key"
+    monkeypatch.setenv("FERNET_KEY_PATH", str(key_path))
+
+    encrypted = crypto.encrypt_value("hello-world")
+
+    assert key_path.exists()
+    stored_key = key_path.read_bytes().strip()
+    assert stored_key
+    assert crypto.decrypt_value(encrypted) == "hello-world"

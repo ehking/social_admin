@@ -2,12 +2,13 @@
 
 from .job_service import JobService, create_job_with_media_and_campaign
 from .storage import StorageResult, StorageService, get_storage_service
-from .trending_video import TrendingTrack, TrendingVideoCreator
+from .trending_video import GeneratedMedia, TrendingTrack, TrendingVideoCreator
 from .worker import Worker
 
 __all__ = [
     "StorageResult",
     "StorageService",
+    "GeneratedMedia",
     "TrendingTrack",
     "TrendingVideoCreator",
     "Worker",

@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import os
-import tempfile
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -133,6 +133,16 @@ def get_preview_download_manager() -> PreviewDownloadManager:
             max_concurrency=_resolve_max_concurrency()
         )
     return _preview_download_manager
+
+
+@dataclass(slots=True)
+class GeneratedMedia:
+    """Details about a generated media artifact and its storage metadata."""
+
+    storage_key: str
+    storage_url: str | None
+    job_media_id: int | None
+    local_path: Path | None = None
 
 
 @dataclass(slots=True)
@@ -428,22 +438,55 @@ class TrendingVideoCreator:
         else:
             caption_text = self._normalize_persian_text(caption_value)
 
-        context_manager = (
-            nullcontext(job_ctx)
-            if job_ctx is not None
-            else job_context(media_id=media_id, campaign_id=campaign_id, log_dir=log_dir)
-        )
-
         resolved_job_name = job_name or self._default_job_name(track)
         output_name = self._derive_output_name(output_path, track)
 
         upload_result: StorageResult | None = None
         job_media_id: int | None = None
+        local_result_path: Path | None = None
 
         with self.worker.temporary_directory(prefix="trend-video-") as temp_dir:
-            audio_path = Path(temp_dir) / "preview.m4a"
+            temp_dir = Path(temp_dir)
+            audio_path = temp_dir / "preview.m4a"
             self.download_preview_sync(track, destination=audio_path)
-            return self.assemble_video(audio_path=audio_path, text=caption_text, output_path=output_path)
+
+            render_path = temp_dir / output_name
+            self.assemble_video(audio_path=audio_path, text=caption_text, output_path=render_path)
+
+            upload_result = self.storage_service.upload_file(
+                render_path,
+                destination_name=output_name,
+                content_type="video/mp4",
+            )
+
+            if self.db_session:
+                job_media = self._record_job_media(
+                    job_name=resolved_job_name,
+                    upload_result=upload_result,
+                )
+                self.db_session.flush()
+                self.db_session.commit()
+                job_media_id = job_media.id
+
+            if output_path is not None:
+                final_path = Path(output_path).expanduser()
+                if not final_path.is_absolute():
+                    final_path = (Path.cwd() / final_path).resolve()
+                else:
+                    final_path = final_path.resolve()
+                final_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(render_path, final_path)
+                local_result_path = final_path
+
+        if upload_result is None:
+            raise StorageError("Failed to upload generated video")
+
+        return GeneratedMedia(
+            storage_key=upload_result.key,
+            storage_url=upload_result.url,
+            job_media_id=job_media_id,
+            local_path=local_result_path,
+        )
 
     # ------------------------------------------------------------------
     # Serialization helpers for inspection or caching

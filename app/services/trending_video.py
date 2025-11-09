@@ -7,9 +7,10 @@ import json
 import logging
 import os
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Any, Callable, Iterable, List, Optional
 
 import arabic_reshaper
 import requests
@@ -21,6 +22,15 @@ from moviepy.editor import (
     CompositeVideoClip,
     TextClip,
 )
+from sqlalchemy.orm import Session
+
+from app import models
+from app.config import AppSettings, get_settings
+
+from .storage import StorageResult, StorageService, StorageError, get_storage_service
+from .worker import Worker
+
+from app.config import get_settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -139,6 +149,97 @@ class TrendingTrack:
         return f"{self.title} — {self.artist}" if self.artist else self.title
 
 
+def _is_retriable_error(error: requests.exceptions.RequestException) -> bool:
+    """Determine whether the raised error is safe to retry."""
+
+    non_retriable = (
+        requests.exceptions.InvalidURL,
+        requests.exceptions.InvalidSchema,
+        requests.exceptions.MissingSchema,
+        requests.exceptions.URLRequired,
+    )
+    if isinstance(error, non_retriable):
+        return False
+
+    if isinstance(error, requests.exceptions.HTTPError):
+        response = error.response
+        if response is None:
+            return True
+        status = response.status_code
+        # Retry on rate limiting and server errors only.
+        return status == 429 or status >= 500
+
+    return True
+
+
+def request_with_backoff(
+    url: str,
+    *,
+    method: Callable[..., requests.Response] = requests.get,
+    max_attempts: Optional[int] = None,
+    min_backoff: Optional[float] = None,
+    max_backoff: Optional[float] = None,
+    **request_kwargs: Any,
+) -> requests.Response:
+    """Execute an HTTP request with exponential backoff and logging."""
+
+    settings = get_settings().trending_request_backoff
+    attempts_limit = max_attempts or settings.max_attempts
+    backoff_min = min_backoff if min_backoff is not None else settings.min_seconds
+    backoff_max = max_backoff if max_backoff is not None else settings.max_seconds
+
+    attempts_limit = max(1, attempts_limit)
+    backoff_min = max(0.0, backoff_min)
+    backoff_max = max(backoff_min if backoff_min > 0 else 0.0, backoff_max)
+
+    attempt = 1
+    method_name = getattr(method, "__name__", str(method))
+    while True:
+        LOGGER.debug("Attempt %d/%d for %s %s", attempt, attempts_limit, method_name.upper(), url)
+        try:
+            response = method(url, **request_kwargs)
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as exc:
+            retriable = _is_retriable_error(exc)
+            if not retriable:
+                LOGGER.error("Non-retriable error calling %s %s: %s", method_name.upper(), url, exc)
+                raise
+
+            if attempt >= attempts_limit:
+                LOGGER.error(
+                    "Request %s %s failed after %d attempts: %s",
+                    method_name.upper(),
+                    url,
+                    attempt,
+                    exc,
+                )
+                raise
+
+            sleep_time = min(backoff_max, backoff_min * (2 ** (attempt - 1))) if backoff_min > 0 else 0
+            if sleep_time > 0:
+                LOGGER.warning(
+                    "Attempt %d/%d for %s %s failed: %s. Retrying in %.2f seconds.",
+                    attempt,
+                    attempts_limit,
+                    method_name.upper(),
+                    url,
+                    exc,
+                    sleep_time,
+                )
+                time.sleep(sleep_time)
+            else:
+                LOGGER.warning(
+                    "Attempt %d/%d for %s %s failed: %s. Retrying immediately.",
+                    attempt,
+                    attempts_limit,
+                    method_name.upper(),
+                    url,
+                    exc,
+                )
+            attempt += 1
+
+
 class TrendingVideoCreator:
     """High level helper for creating captioned videos with trending audio previews."""
 
@@ -150,6 +251,10 @@ class TrendingVideoCreator:
         height: int = 1920,
         background_color: tuple[int, int, int] = (0, 0, 0),
         translator: Optional[GoogleTranslator] = None,
+        worker: Worker | None = None,
+        storage_service: StorageService | None = None,
+        db_session: Session | None = None,
+        settings: AppSettings | None = None,
     ) -> None:
         self.font_path = Path(font_path)
         if not self.font_path.exists():
@@ -159,6 +264,10 @@ class TrendingVideoCreator:
         self.height = height
         self.background_color = background_color
         self.translator = translator or GoogleTranslator(source="auto", target="fa")
+        self.settings = settings or get_settings()
+        self.worker = worker or Worker(settings=self.settings)
+        self.storage_service = storage_service or get_storage_service(self.settings)
+        self.db_session = db_session
 
     # ------------------------------------------------------------------
     # Data acquisition helpers
@@ -169,9 +278,8 @@ class TrendingVideoCreator:
 
         url = f"https://itunes.apple.com/{country}/rss/topsongs/limit={limit}/json"
         LOGGER.debug("Fetching top songs from %s", url)
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        payload = response.json()
+        with request_with_backoff(url, timeout=10) as response:
+            payload = response.json()
 
         entries: Iterable[dict] = payload.get("feed", {}).get("entry", [])
         tracks: List[TrendingTrack] = []
@@ -234,7 +342,13 @@ class TrendingVideoCreator:
             .set_position("center")
         )
 
-    def assemble_video(self, audio_path: Path, text: str, *, output_path: Path) -> Path:
+    def assemble_video(
+        self,
+        audio_path: Path,
+        text: str,
+        *,
+        output_path: Path,
+    ) -> Path:
         """Create a simple vertical video with the provided audio and caption."""
 
         audio_clip = AudioFileClip(str(audio_path))
@@ -249,7 +363,6 @@ class TrendingVideoCreator:
         video = CompositeVideoClip([background, caption]).set_audio(audio_clip)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        LOGGER.info("Rendering video to %s", output_path)
         video.write_videofile(  # type: ignore[no-untyped-call]
             str(output_path),
             fps=30,
@@ -261,6 +374,42 @@ class TrendingVideoCreator:
         return output_path
 
     # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _sanitize_filename(name: str) -> str:
+        safe_chars = [char if char.isalnum() or char in {"-", "_"} else "-" for char in name]
+        sanitized = "".join(safe_chars).strip("-_")
+        return sanitized or "trend-video"
+
+    @classmethod
+    def _derive_output_name(cls, output_path: Path | None, track: TrendingTrack) -> str:
+        if output_path:
+            base = Path(output_path).stem
+        else:
+            base = track.title or "trend-video"
+            if track.artist:
+                base = f"{base}-{track.artist}"
+        sanitized = cls._sanitize_filename(base)
+        return f"{sanitized}.mp4"
+
+    @staticmethod
+    def _default_job_name(track: TrendingTrack) -> str:
+        return f"trend-video:{track.display_name}"
+
+    def _record_job_media(self, *, job_name: str, upload_result: StorageResult) -> models.JobMedia:
+        if not self.db_session:
+            raise RuntimeError("Database session is required to record job media")
+        job_media = models.JobMedia(
+            job_name=job_name,
+            media_type="video/mp4",
+            storage_key=upload_result.key,
+            storage_url=upload_result.url,
+        )
+        self.db_session.add(job_media)
+        return job_media
+
+    # ------------------------------------------------------------------
     # High-level orchestration
     # ------------------------------------------------------------------
     def generate_trend_video(
@@ -268,17 +417,31 @@ class TrendingVideoCreator:
         *,
         track: TrendingTrack,
         caption_template: str,
-        output_path: Path,
+        output_path: Path | None = None,
         translate: bool = True,
-    ) -> Path:
-        """Generate a captioned video for the provided track."""
+        job_name: str | None = None,
+    ) -> GeneratedMedia:
+        """Generate, upload, and register a captioned video for the provided track."""
 
+        caption_value = caption_template.format(track=track.display_name)
         if translate:
-            caption_text = self.translate_to_persian(caption_template.format(track=track.display_name))
+            caption_text = self.translate_to_persian(caption_value)
         else:
-            caption_text = self._normalize_persian_text(caption_template.format(track=track.display_name))
+            caption_text = self._normalize_persian_text(caption_value)
 
-        with tempfile.TemporaryDirectory() as temp_dir:
+        context_manager = (
+            nullcontext(job_ctx)
+            if job_ctx is not None
+            else job_context(media_id=media_id, campaign_id=campaign_id, log_dir=log_dir)
+        )
+
+        resolved_job_name = job_name or self._default_job_name(track)
+        output_name = self._derive_output_name(output_path, track)
+
+        upload_result: StorageResult | None = None
+        job_media_id: int | None = None
+
+        with self.worker.temporary_directory(prefix="trend-video-") as temp_dir:
             audio_path = Path(temp_dir) / "preview.m4a"
             self.download_preview_sync(track, destination=audio_path)
             return self.assemble_video(audio_path=audio_path, text=caption_text, output_path=output_path)

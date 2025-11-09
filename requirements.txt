@@ -9,3 +9,4 @@ moviepy==1.0.3
 deep-translator==1.11.4
 arabic-reshaper==3.0.0
 python-bidi==0.4.2
+cryptography==42.0.5

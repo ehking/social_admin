@@ -34,3 +34,23 @@ def test_transaction_rolls_back_on_media_failure():
         assert session.query(Job).count() == 0
         assert session.query(JobMedia).count() == 0
         assert session.query(Campaign).count() == 0
+
+
+def test_media_defaults_to_job_title_when_name_missing():
+    job_payload = {"title": "Social Clip", "description": "Short clip"}
+    media_payloads = [
+        {"media_type": "video/mp4", "media_url": "https://cdn.example/video.mp4"}
+    ]
+    campaign_payload = {"name": "Awareness"}
+
+    service = JobService()
+    job = service.create_job_with_media_and_campaign(
+        job_payload, media_payloads, campaign_payload
+    )
+
+    with SessionLocal() as session:
+        persisted_job = session.get(Job, job.id)
+
+        assert persisted_job is not None
+        assert persisted_job.media, "Job should have related media"
+        assert persisted_job.media[0].job_name == "Social Clip"

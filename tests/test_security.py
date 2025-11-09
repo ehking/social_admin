@@ -61,6 +61,13 @@ def test_service_token_value_encrypted_in_database(session_factory):
         session.close()
 
 
+def test_decrypt_plaintext_legacy_value_returns_original():
+    legacy_value = "plain-text-secret"
+
+    # Simulate a database record created before encryption was introduced.
+    assert crypto.decrypt_value(legacy_value) == legacy_value
+
+
 def test_viewer_role_cannot_access_admin_only_section(session_factory):
     session = session_factory()
     try:

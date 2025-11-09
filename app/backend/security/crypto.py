@@ -198,7 +198,38 @@ def decrypt_value(token: str) -> str:
     try:
         decrypted = cipher.decrypt(token.encode())
     except InvalidToken as exc:
+        if not _looks_like_encrypted_token(token):
+            return token
         raise EncryptionError("Failed to decrypt value: invalid token.") from exc
     except Exception as exc:  # pragma: no cover - defensive branch
         raise EncryptionError("Failed to decrypt value.") from exc
     return decrypted.decode()
+
+
+def _looks_like_encrypted_token(token: str) -> bool:
+    """Heuristic to detect if a string is likely an encrypted Fernet token."""
+
+    if not token:
+        return False
+
+    # Fernet tokens are url-safe base64 strings with a minimum length. They
+    # always encode the version byte 0x80, which results in a leading "g".
+    if len(token) < 16 or not token.startswith("g"):
+        return False
+
+    allowed = set(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+    token_bytes = token.encode()
+    if any(byte not in allowed for byte in token_bytes):
+        return False
+
+    # Ensure the value can be base64 decoded once padding is added. If this
+    # fails it's unlikely to be a Fernet token (e.g. legacy plaintext values).
+    padding = "=" * ((4 - len(token) % 4) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(token + padding)
+    except Exception:  # pragma: no cover - best-effort heuristic
+        return False
+
+    # A valid Fernet payload contains metadata (version, timestamp, IV, HMAC)
+    # and should therefore be reasonably long.
+    return len(decoded) >= 32

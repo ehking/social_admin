@@ -201,6 +201,9 @@ class ManualVideoPresenter:
         if job.id is not None:
             local_preview_url, local_preview_path = self._find_local_preview(job.id)
 
+        ai_tool_raw = getattr(job, "ai_tool", "") or ""
+        ai_tool_value = str(ai_tool_raw).strip()
+
         return ManualVideoJobView(
             title=job.title,
             campaign_name=campaign_name,

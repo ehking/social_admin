@@ -67,6 +67,14 @@ def run_startup_migrations() -> None:
                     )
                 )
 
+            if "ai_tool" not in job_columns:
+                connection.execute(
+                    text(
+                        "ALTER TABLE jobs ADD COLUMN ai_tool VARCHAR(150) "
+                        "DEFAULT '' NOT NULL"
+                    )
+                )
+
         if "job_media" in tables:
             job_media_columns = {
                 column["name"] for column in inspector.get_columns("job_media")
@@ -80,4 +88,16 @@ def run_startup_migrations() -> None:
             if "job_id" not in job_media_columns:
                 connection.execute(
                     text("ALTER TABLE job_media ADD COLUMN job_id INTEGER")
+                )
+
+        if "service_tokens" in tables:
+            service_token_columns = {
+                column["name"] for column in inspector.get_columns("service_tokens")
+            }
+
+            if "endpoint_url" not in service_token_columns:
+                connection.execute(
+                    text(
+                        "ALTER TABLE service_tokens ADD COLUMN endpoint_url VARCHAR(500)"
+                    )
                 )

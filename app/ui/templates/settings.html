@@ -12,15 +12,15 @@
     </header>
     <form method="post" action="/settings" class="form-grid">
         <div class="form-field">
-            <label for="name">نام سرویس</label>
+            <label for="name">نام سرویس <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="text" id="name" name="name" required>
         </div>
         <div class="form-field">
-            <label for="key">کلید</label>
+            <label for="key">کلید <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="text" id="key" name="key" required>
         </div>
         <div class="form-field full">
-            <label for="value">مقدار</label>
+            <label for="value">مقدار <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <textarea id="value" name="value" rows="3" required></textarea>
         </div>
         <div class="form-actions">

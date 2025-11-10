@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -12,6 +14,9 @@ from app.backend.database import get_db
 from ..app_presenters.settings_presenter import SettingsPresenter
 
 ADMIN_ROLES = [models.AdminRole.ADMIN, models.AdminRole.SUPERADMIN]
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_router(presenter: SettingsPresenter) -> APIRouter:
@@ -26,7 +31,9 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
             required_menu=models.AdminMenu.SETTINGS,
         )
         if not user:
+            logger.info("Settings access denied for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
+        logger.info("Rendering settings page", extra={"user_id": user.id})
         return presenter.render(request, user, db)
 
     @router.post("/settings")
@@ -44,7 +51,12 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
             required_menu=models.AdminMenu.SETTINGS,
         )
         if not user:
+            logger.info("Token save denied for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
+        logger.info(
+            "Saving integration token",
+            extra={"user_id": user.id, "token_name": name},
+        )
         return presenter.save_token(db=db, user=user, name=name, key=key, value=value)
 
     @router.post("/settings/delete")
@@ -60,7 +72,12 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
             required_menu=models.AdminMenu.SETTINGS,
         )
         if not user:
+            logger.info("Token delete denied for unauthenticated user", extra={"token_id": token_id})
             return RedirectResponse(url="/login", status_code=302)
+        logger.info(
+            "Deleting integration token",
+            extra={"user_id": user.id, "token_id": token_id},
+        )
         return presenter.delete_token(db=db, user=user, token_id=token_id)
 
     @router.post("/settings/permissions")

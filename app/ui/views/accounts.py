@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -12,6 +13,9 @@ from app.backend import auth, models
 from app.backend.database import get_db
 
 from ..app_presenters.accounts_presenter import AccountsPresenter
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_router(presenter: AccountsPresenter) -> APIRouter:
@@ -25,7 +29,9 @@ def create_router(presenter: AccountsPresenter) -> APIRouter:
             required_menu=models.AdminMenu.ACCOUNTS,
         )
         if not user:
+            logger.info("Unauthenticated accounts list access redirected")
             return RedirectResponse(url="/login", status_code=302)
+        logger.info("Rendering accounts list", extra={"user_id": user.id})
         return presenter.list_accounts(request, user, db)
 
     @router.get("/accounts/new")
@@ -36,7 +42,9 @@ def create_router(presenter: AccountsPresenter) -> APIRouter:
             required_menu=models.AdminMenu.ACCOUNTS,
         )
         if not user:
+            logger.info("Unauthenticated new account access redirected")
             return RedirectResponse(url="/login", status_code=302)
+        logger.info("Rendering new account form", extra={"user_id": user.id})
         return presenter.account_form(request, user, db=db)
 
     @router.get("/accounts/{account_id}")
@@ -47,7 +55,12 @@ def create_router(presenter: AccountsPresenter) -> APIRouter:
             required_menu=models.AdminMenu.ACCOUNTS,
         )
         if not user:
+            logger.info("Unauthenticated account edit redirected", extra={"account_id": account_id})
             return RedirectResponse(url="/login", status_code=302)
+        logger.info(
+            "Rendering account edit form",
+            extra={"user_id": user.id, "account_id": account_id},
+        )
         return presenter.account_form(request, user, db=db, account_id=account_id)
 
     @router.post("/accounts")
@@ -68,7 +81,17 @@ def create_router(presenter: AccountsPresenter) -> APIRouter:
             required_menu=models.AdminMenu.ACCOUNTS,
         )
         if not user:
+            logger.info("Unauthenticated account save redirected")
             return RedirectResponse(url="/login", status_code=302)
+        logger.info(
+            "Saving account",
+            extra={
+                "user_id": user.id,
+                "platform": platform,
+                "account_id": account_id,
+                "has_oauth_token": bool(oauth_token),
+            },
+        )
         return presenter.save_account(
             request=request,
             db=db,
@@ -94,7 +117,15 @@ def create_router(presenter: AccountsPresenter) -> APIRouter:
             required_menu=models.AdminMenu.ACCOUNTS,
         )
         if not user:
+            logger.info(
+                "Unauthenticated account delete redirected",
+                extra={"account_id": account_id},
+            )
             return RedirectResponse(url="/login", status_code=302)
+        logger.info(
+            "Deleting account",
+            extra={"user_id": user.id, "account_id": account_id},
+        )
         return presenter.delete_account(db=db, user=user, account_id=account_id)
 
     return router

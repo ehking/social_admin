@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from logging.config import dictConfig
+from pathlib import Path
 from typing import Any, Dict
 
 DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
@@ -17,10 +18,17 @@ DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "standard",
-        }
+        },
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "formatter": "standard",
+            "filename": "logs/app.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 3,
+        },
     },
     "loggers": {
-        "": {"handlers": ["console"], "level": "INFO"},
+        "": {"handlers": ["console", "file"], "level": "INFO"},
         "uvicorn.error": {"level": "INFO"},
         "uvicorn.access": {"level": "INFO"},
     },
@@ -37,5 +45,14 @@ def configure_logging(config: Dict[str, Any] | None = None) -> None:
         :data:`DEFAULT_LOGGING_CONFIG` is used.
     """
 
-    dictConfig(config or DEFAULT_LOGGING_CONFIG)
-    logging.getLogger(__name__).debug("Logging configured", extra={"config": config})
+    resolved_config = config or DEFAULT_LOGGING_CONFIG
+
+    log_path = Path(
+        resolved_config["handlers"].get("file", {}).get("filename", "logs/app.log")
+    )
+    if log_path:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    dictConfig(resolved_config)
+    logging.captureWarnings(True)
+    logging.getLogger(__name__).debug("Logging configured", extra={"config": resolved_config})

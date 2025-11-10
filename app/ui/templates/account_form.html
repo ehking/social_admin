@@ -9,11 +9,11 @@
             <input type="hidden" name="account_id" value="{{ account.id }}">
         {% endif %}
         <div class="form-field">
-            <label for="platform">پلتفرم</label>
+            <label for="platform">پلتفرم <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="text" id="platform" name="platform" value="{{ account.platform if account else '' }}" required>
         </div>
         <div class="form-field">
-            <label for="display_name">نام نمایشی</label>
+            <label for="display_name">نام نمایشی <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="text" id="display_name" name="display_name" value="{{ account.display_name if account else '' }}" required>
         </div>
         <div class="form-field">

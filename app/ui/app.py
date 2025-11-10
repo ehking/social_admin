@@ -39,6 +39,7 @@ except ImportError:  # pragma: no cover - fallback for test environments
 
 from app.backend import auth
 from app.backend.database import Base, SessionLocal, engine, run_startup_migrations
+from app.backend.logging_config import configure_logging
 from app.backend.monitoring import configure_monitoring
 from app.backend.services.permissions import ensure_default_permissions
 
@@ -64,6 +65,7 @@ from .views import (
     settings,
 )
 
+configure_logging()
 logger = logging.getLogger(__name__)
 
 REQUEST_COUNT = Counter(
@@ -91,6 +93,8 @@ def create_app() -> FastAPI:
 
     templates = Jinja2Templates(directory="app/ui/templates")
 
+    logger.info("Initialising Social Admin FastAPI application")
+
     configure_monitoring(app)
 
     auth_presenter = AuthPresenter(templates)
@@ -114,19 +118,45 @@ def create_app() -> FastAPI:
     app.include_router(metrics.create_router())
     app.include_router(logs.create_router(logs_presenter))
 
+    logger.info("Registered routers for application", extra={"routers": len(app.routes)})
+
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):
         start_time = perf_counter()
-        response: Response = await call_next(request)
-        elapsed = perf_counter() - start_time
         path = request.url.path
         method = request.method
+        client = request.client.host if request.client else None
+
+        logger.info(
+            "Handling request",
+            extra={
+                "method": method,
+                "path": path,
+                "client": client,
+            },
+        )
+        try:
+            response: Response = await call_next(request)
+        except Exception:
+            elapsed = perf_counter() - start_time
+            logger.exception(
+                "Request raised an unhandled exception",
+                extra={
+                    "method": method,
+                    "path": path,
+                    "client": client,
+                    "duration": elapsed,
+                },
+            )
+            raise
+
+        elapsed = perf_counter() - start_time
         status = response.status_code
 
         REQUEST_COUNT.labels(method=method, path=path, status=status).inc()
         REQUEST_LATENCY.labels(method=method, path=path).observe(elapsed)
-        logger.debug(
-            "Processed request",
+        logger.info(
+            "Completed request",
             extra={
                 "method": method,
                 "path": path,

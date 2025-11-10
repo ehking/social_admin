@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -10,6 +12,9 @@ from app.backend import auth, models
 from app.backend.database import get_db
 
 from ..app_presenters.documentation_presenter import DocumentationPresenter
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_router(presenter: DocumentationPresenter) -> APIRouter:
@@ -23,6 +28,7 @@ def create_router(presenter: DocumentationPresenter) -> APIRouter:
             required_menu=models.AdminMenu.DOCUMENTATION,
         )
         if not user:
+            logger.info("Documentation access redirected for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
         return presenter.render(request, user, db)
 

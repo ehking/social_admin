@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -12,6 +14,9 @@ from app.backend.database import get_db
 from ..app_presenters.logs_presenter import LogsPresenter
 
 ADMIN_ROLES = [models.AdminRole.ADMIN, models.AdminRole.SUPERADMIN]
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_router(presenter: LogsPresenter) -> APIRouter:
@@ -26,6 +31,7 @@ def create_router(presenter: LogsPresenter) -> APIRouter:
             required_menu=models.AdminMenu.LOGS,
         )
         if not user:
+            logger.info("Logs access redirected for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
         return presenter.render(request, user, db)
 

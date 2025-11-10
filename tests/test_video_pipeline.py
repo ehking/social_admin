@@ -183,6 +183,8 @@ def test_generate_trend_video_creates_local_copy(monkeypatch, tmp_path):
     assert result.storage_url == "http://storage/custom-name.mp4"
     assert result.job_media_id is None
     assert result.local_path == output_path.resolve()
+    assert result.log_path is not None
+    assert result.log_path.exists()
 
 
 def test_default_job_name_handles_missing_metadata():

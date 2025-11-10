@@ -8,9 +8,10 @@ import logging
 import os
 import shutil
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional
 
 import arabic_reshaper
 import requests
@@ -26,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from ..config import AppSettings, get_settings
+from ..logging_utils import job_context
 
 from .storage import StorageResult, StorageService, StorageError, get_storage_service
 from .worker import Worker
@@ -143,6 +145,26 @@ class GeneratedMedia:
     storage_url: str | None
     job_media_id: int | None
     local_path: Path | None = None
+    log_path: Path | None = None
+
+
+@contextmanager
+def _log_stage(
+    logger: logging.Logger | logging.LoggerAdapter,
+    stage: str,
+    **extra: Any,
+) -> Iterator[Dict[str, Any]]:
+    """Log the lifecycle of a workflow stage with structured metadata."""
+
+    payload: Dict[str, Any] = {"stage": stage, **extra}
+    logger.info("stage_started", extra=payload)
+    try:
+        yield payload
+    except Exception:
+        logger.exception("stage_failed", extra=payload)
+        raise
+    else:
+        logger.info("stage_completed", extra=payload)
 
 
 @dataclass(slots=True)
@@ -471,49 +493,135 @@ class TrendingVideoCreator:
         upload_result: StorageResult | None = None
         job_media_id: int | None = None
         local_result_path: Path | None = None
+        generated_media: GeneratedMedia | None = None
 
-        with self.worker.temporary_directory(prefix="trend-video-") as temp_dir:
-            temp_dir = Path(temp_dir)
-            audio_path = temp_dir / "preview.m4a"
-            self.download_preview_sync(track, destination=audio_path)
+        extra_context = {
+            "job_name": resolved_job_name,
+            "track_display_name": track.display_name,
+            "track_title": track.title,
+            "track_artist": track.artist,
+            "track_preview_url": track.preview_url,
+            "output_name": output_name,
+            "translate": translate,
+        }
 
-            render_path = temp_dir / output_name
-            self.assemble_video(audio_path=audio_path, text=caption_text, output_path=render_path)
+        with job_context(extra_context=extra_context) as log_ctx:
+            job_logger = log_ctx.logger
 
-            upload_result = self.storage_service.upload_file(
-                render_path,
-                destination_name=output_name,
-                content_type="video/mp4",
+            job_logger.info(
+                "caption_resolved",
+                extra={
+                    "stage": "prepare_caption",
+                    "caption_template": caption_template,
+                    "caption_value": caption_value,
+                },
             )
 
-            if self.db_session:
-                job_media = self._record_job_media(
-                    job_name=resolved_job_name,
-                    upload_result=upload_result,
+            with self.worker.temporary_directory(prefix="trend-video-") as temp_dir:
+                temp_dir = Path(temp_dir)
+                job_logger.info(
+                    "worker_directory_ready",
+                    extra={"stage": "prepare_workspace", "path": str(temp_dir)},
                 )
-                self.db_session.flush()
-                self.db_session.commit()
-                job_media_id = job_media.id
 
-            if output_path is not None:
-                final_path = Path(output_path).expanduser()
-                if not final_path.is_absolute():
-                    final_path = (Path.cwd() / final_path).resolve()
-                else:
-                    final_path = final_path.resolve()
-                final_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(render_path, final_path)
-                local_result_path = final_path
+                audio_path = temp_dir / "preview.m4a"
+                with _log_stage(
+                    job_logger,
+                    "download_preview",
+                    preview_url=track.preview_url,
+                    destination=str(audio_path),
+                ):
+                    self.download_preview_sync(track, destination=audio_path)
 
-        if upload_result is None:
-            raise StorageError("Failed to upload generated video")
+                render_path = temp_dir / output_name
+                with _log_stage(
+                    job_logger,
+                    "render_video",
+                    destination=str(render_path),
+                ):
+                    self.assemble_video(
+                        audio_path=audio_path,
+                        text=caption_text,
+                        output_path=render_path,
+                    )
 
-        return GeneratedMedia(
-            storage_key=upload_result.key,
-            storage_url=upload_result.url,
-            job_media_id=job_media_id,
-            local_path=local_result_path,
-        )
+                with _log_stage(
+                    job_logger,
+                    "upload_video",
+                    destination_name=output_name,
+                ) as upload_payload:
+                    upload_result = self.storage_service.upload_file(
+                        render_path,
+                        destination_name=output_name,
+                        content_type="video/mp4",
+                    )
+                    upload_payload["storage_key"] = upload_result.key
+                    upload_payload["storage_url"] = upload_result.url
+
+                if self.db_session:
+                    with _log_stage(
+                        job_logger,
+                        "record_job_media",
+                        job_name=resolved_job_name,
+                    ) as media_payload:
+                        job_media = self._record_job_media(
+                            job_name=resolved_job_name,
+                            upload_result=upload_result,
+                        )
+                        self.db_session.flush()
+                        self.db_session.commit()
+                        job_media_id = job_media.id
+                        media_payload["job_media_id"] = job_media_id
+                        log_ctx.logger.extra["job_media_id"] = job_media_id  # type: ignore[attr-defined]
+                        log_ctx.media_id = job_media_id
+
+                if output_path is not None:
+                    with _log_stage(
+                        job_logger,
+                        "persist_local_copy",
+                        destination=str(output_path),
+                    ) as copy_payload:
+                        final_path = Path(output_path).expanduser()
+                        if not final_path.is_absolute():
+                            final_path = (Path.cwd() / final_path).resolve()
+                        else:
+                            final_path = final_path.resolve()
+                        final_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(render_path, final_path)
+                        local_result_path = final_path
+                        copy_payload["local_path"] = str(final_path)
+
+            if upload_result is None:
+                job_logger.error(
+                    "missing_upload_result",
+                    extra={"stage": "complete", "reason": "storage_service_returned_none"},
+                )
+                raise StorageError("Failed to upload generated video")
+
+            job_logger.info(
+                "job_succeeded",
+                extra={
+                    "stage": "complete",
+                    "storage_key": upload_result.key,
+                    "storage_url": upload_result.url,
+                    "job_media_id": job_media_id,
+                    "local_path": str(local_result_path) if local_result_path else None,
+                    "log_path": str(log_ctx.log_path),
+                },
+            )
+
+            generated_media = GeneratedMedia(
+                storage_key=upload_result.key,
+                storage_url=upload_result.url,
+                job_media_id=job_media_id,
+                local_path=local_result_path,
+                log_path=log_ctx.log_path,
+            )
+
+        if generated_media is None:  # pragma: no cover - defensive
+            raise StorageError("Trend video generation did not produce a result")
+
+        return generated_media
 
     # ------------------------------------------------------------------
     # Serialization helpers for inspection or caching

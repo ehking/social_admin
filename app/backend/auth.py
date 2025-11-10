@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from typing import Iterable, Optional
 
 from fastapi import HTTPException, Request, status
@@ -9,8 +8,11 @@ from sqlalchemy.orm import Session
 from . import models
 from .services import permissions as permissions_service
 from .services.data_access import AdminUserService
+from .services import permissions as permissions_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
+
 logger = logging.getLogger(__name__)
 
 

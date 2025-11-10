@@ -62,6 +62,13 @@ class JobService:
                     media_data = dict(payload)
                     if not media_data.get("job_name"):
                         media_data["job_name"] = job.title
+                    if not media_data.get("storage_key"):
+                        fallback_storage_key = (
+                            media_data.get("media_url")
+                            or media_data.get("storage_url")
+                        )
+                        if fallback_storage_key:
+                            media_data["storage_key"] = fallback_storage_key
                     media = JobMedia(job=job, **media_data)
                     session.add(media)
                     logger.debug(

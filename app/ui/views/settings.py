@@ -42,6 +42,7 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         name: str = Form(...),
         key: str = Form(...),
         value: str = Form(...),
+        endpoint_url: str | None = Form(None),
         db: Session = Depends(get_db),
     ):
         user = auth.get_logged_in_user(
@@ -60,6 +61,7 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
             name=name,
             key=key,
             value=value,
+            endpoint_url=endpoint_url,
         )
 
     @router.post("/settings/delete")

@@ -53,10 +53,16 @@ class SettingsPresenter:
         name: str,
         key: str,
         value: str,
+        endpoint_url: str | None,
     ) -> RedirectResponse | object:
         service = ServiceTokenService(db)
         try:
-            token, created = service.upsert_token(name=name, key=key, value=value)
+            token, created = service.upsert_token(
+                name=name,
+                key=key,
+                value=value,
+                endpoint_url=endpoint_url,
+            )
         except DatabaseServiceError as exc:
             self.logger.error(
                 "Failed to save service token",

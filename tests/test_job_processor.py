@@ -1,3 +1,4 @@
+import json
 import pathlib
 import sys
 
@@ -43,6 +44,7 @@ def test_processor_marks_job_completed_when_media_exists(tmp_path):
         assert refreshed is not None
         assert refreshed.status == "completed"
         assert refreshed.progress_percent == 100
+        assert refreshed.error_details is None
 
     log_files = list(logs_dir.glob("*.log"))
     assert log_files, "Processor should emit job log files"
@@ -63,6 +65,35 @@ def test_processor_marks_job_failed_when_media_missing(tmp_path):
         assert refreshed is not None
         assert refreshed.status == "failed"
         assert refreshed.progress_percent == 100
+        assert refreshed.error_details is not None
+        details = json.loads(refreshed.error_details)
+        assert details["code"] == "missing_file"
+        assert "message" in details
 
     log_files = list(logs_dir.glob("*.log"))
     assert log_files, "Processor should emit job log files for failures"
+
+
+def test_processor_records_unexpected_errors(tmp_path, monkeypatch):
+    logs_dir = tmp_path / "logs"
+    media_path = tmp_path / "video.mp4"
+    media_path.write_bytes(b"content")
+
+    job = _create_job(media_path)
+
+    processor = JobProcessor(log_directory=logs_dir)
+
+    def blow_up(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(JobProcessor, "_validate_job", blow_up)
+    processor.process_pending_jobs()
+
+    with SessionLocal() as session:
+        refreshed = session.get(Job, job.id)
+        assert refreshed is not None
+        assert refreshed.status == "failed"
+        assert refreshed.error_details is not None
+        details = json.loads(refreshed.error_details)
+        assert details["code"] == "unexpected"
+        assert details["context"]["error"] == "RuntimeError"

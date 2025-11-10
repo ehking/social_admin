@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -111,6 +112,7 @@ class JobProcessor:
 
             job.status = "processing"
             job.progress_percent = max(int(job.progress_percent or 0), 10)
+            job.error_details = None
             session.flush()
             session.refresh(job)
 
@@ -140,6 +142,7 @@ class JobProcessor:
                 except JobProcessingError as exc:
                     job.status = "failed"
                     job.progress_percent = 100
+                    self._record_error_details(job, error=exc)
                     session.add(job)
                     session.commit()
                     logger.error(
@@ -151,9 +154,10 @@ class JobProcessor:
                         },
                     )
                     return
-                except Exception:
+                except Exception as exc:
                     job.status = "failed"
                     job.progress_percent = 100
+                    self._record_error_details(job, unexpected_error=exc)
                     session.add(job)
                     session.commit()
                     logger.exception(
@@ -164,6 +168,7 @@ class JobProcessor:
 
                 job.status = "completed"
                 job.progress_percent = 100
+                job.error_details = None
                 session.add(job)
                 session.commit()
                 logger.info(
@@ -252,6 +257,48 @@ class JobProcessor:
             "status_code": response.status_code,
         }
 
+    def _localize_error_message(self, code: str, *, default: str) -> str:
+        message = self._ERROR_MESSAGES.get(code)
+        if message:
+            return message
+        return default
+
+    def _record_error_details(
+        self,
+        job: Job,
+        *,
+        error: JobProcessingError | None = None,
+        unexpected_error: Exception | None = None,
+    ) -> None:
+        if error is not None:
+            message = self._localize_error_message(error.code, default=str(error))
+            payload: Dict[str, object] = {
+                "message": message,
+                "code": error.code,
+            }
+            if error.context:
+                payload["context"] = error.context
+        elif unexpected_error is not None:
+            message = self._ERROR_MESSAGES["unexpected"]
+            payload = {
+                "message": message,
+                "code": "unexpected",
+                "context": {
+                    "error": unexpected_error.__class__.__name__,
+                    "details": str(unexpected_error),
+                },
+            }
+        else:  # pragma: no cover - defensive guard
+            payload = {"message": "", "code": "unknown"}
+
+        try:
+            job.error_details = json.dumps(payload, ensure_ascii=False)
+        except (TypeError, ValueError):  # pragma: no cover - defensive guard
+            job.error_details = json.dumps(
+                {"message": payload.get("message"), "code": payload.get("code")},
+                ensure_ascii=False,
+            )
+
     @staticmethod
     def _resolve_local_path(source: str) -> Path:
         if source.startswith("file://"):
@@ -260,4 +307,13 @@ class JobProcessor:
         if not candidate.is_absolute():
             candidate = (Path.cwd() / candidate).resolve()
         return candidate
+
+    _ERROR_MESSAGES = {
+        "missing_media": "هیچ رسانه‌ای برای پردازش وظیفه یافت نشد.",
+        "missing_url": "آدرس فایل رسانه در دسترس نیست.",
+        "missing_file": "فایل رسانه‌ای که برای پردازش نیاز است یافت نشد.",
+        "network_error": "دسترسی به آدرس فایل رسانه امکان‌پذیر نبود.",
+        "bad_status": "آدرس فایل رسانه با وضعیت ناموفق پاسخ داد.",
+        "unexpected": "خطای غیرمنتظره‌ای هنگام پردازش ویدیو رخ داد.",
+    }
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+import json
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -47,6 +48,8 @@ class ManualVideoJobView:
     local_preview_url: Optional[str]
     local_preview_path: Optional[str]
     created_at: Optional[datetime]
+    error_message: Optional[str]
+    error_code: Optional[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,8 +207,30 @@ class ManualVideoPresenter:
         if job.id is not None:
             local_preview_url, local_preview_path = self._find_local_preview(job.id)
 
+        error_message: Optional[str] = None
+        error_code: Optional[str] = None
+        raw_error_details = getattr(job, "error_details", None)
+        if raw_error_details:
+            try:
+                parsed = json.loads(raw_error_details)
+            except (TypeError, ValueError):
+                parsed = None
+
+            if isinstance(parsed, dict):
+                message_value = parsed.get("message")
+                if isinstance(message_value, str):
+                    error_message = message_value.strip() or None
+                code_value = parsed.get("code")
+                if isinstance(code_value, str):
+                    error_code = code_value.strip() or None
+            elif isinstance(raw_error_details, str):
+                error_message = raw_error_details.strip() or None
+
         ai_tool_raw = getattr(job, "ai_tool", "") or ""
         ai_tool_value = str(ai_tool_raw).strip()
+
+        if status_raw == "failed" and error_message:
+            stage_hint = error_message
 
         return ManualVideoJobView(
             title=job.title,
@@ -221,6 +246,8 @@ class ManualVideoPresenter:
             local_preview_url=local_preview_url,
             local_preview_path=local_preview_path,
             created_at=job.created_at,
+            error_message=error_message,
+            error_code=error_code,
         )
 
     def _load_recent_jobs(
@@ -245,6 +272,7 @@ class ManualVideoPresenter:
             "jobs": jobs,
             "active_page": "manual_video",
             "ai_tools": self._ai_tools,
+            "sample_ai_videos": SAMPLE_AI_VIDEOS,
         }
         if load_error:
             context["error"] = load_error
@@ -331,6 +359,7 @@ class ManualVideoPresenter:
                 "error": "عنوان، لینک ویدیو و نام کمپین الزامی هستند.",
                 "active_page": "manual_video",
                 "ai_tools": self._ai_tools,
+                "sample_ai_videos": SAMPLE_AI_VIDEOS,
             }
             if not clean_ai_tool:
                 context["error"] = (
@@ -350,6 +379,7 @@ class ManualVideoPresenter:
                 "error": "ابزار هوش مصنوعی انتخاب‌شده معتبر نیست.",
                 "active_page": "manual_video",
                 "ai_tools": self._ai_tools,
+                "sample_ai_videos": SAMPLE_AI_VIDEOS,
             }
             if load_error:
                 context.setdefault("load_error", load_error)
@@ -391,6 +421,7 @@ class ManualVideoPresenter:
                 "error": "ثبت ویدیو با خطا مواجه شد: " + str(exc),
                 "active_page": "manual_video",
                 "ai_tools": self._ai_tools,
+                "sample_ai_videos": SAMPLE_AI_VIDEOS,
             }
             if load_error:
                 context.setdefault("load_error", load_error)

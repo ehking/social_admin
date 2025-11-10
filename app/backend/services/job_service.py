@@ -98,6 +98,12 @@ class JobService:
         with self._session_factory() as session:
             with session.begin():
                 job = Job(**job_payload)
+                progress_value = getattr(job, "progress_percent", 0) or 0
+                try:
+                    normalized_progress = int(progress_value)
+                except (TypeError, ValueError):  # pragma: no cover - defensive guard
+                    normalized_progress = 0
+                job.progress_percent = max(0, min(100, normalized_progress))
                 session.add(job)
                 session.flush()
                 logger.debug("Job persisted", extra={"job_id": job.id})

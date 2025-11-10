@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 from fastapi import Request
@@ -15,7 +16,53 @@ from app.backend import models
 from app.backend.services import create_job_with_media_and_campaign
 from app.backend.services.data_access import DatabaseServiceError, JobQueryService
 
-from .helpers import build_layout_context
+
+@dataclass(frozen=True, slots=True)
+class StatusPresentation:
+    label: str
+    badge_class: str
+    progress_description: str
+
+
+@dataclass(slots=True)
+class ManualVideoJobView:
+    title: str
+    campaign_name: Optional[str]
+    status_label: str
+    status_badge_class: str
+    progress_percent: int
+    progress_description: str
+    created_at: Optional[datetime]
+
+
+STATUS_PRESENTATIONS: dict[str, StatusPresentation] = {
+    "pending": StatusPresentation(
+        label="در انتظار پردازش",
+        badge_class="badge-warning",
+        progress_description="وظیفه در صف پردازش قرار دارد",
+    ),
+    "processing": StatusPresentation(
+        label="در حال پردازش",
+        badge_class="badge-info",
+        progress_description="سیستم در حال پردازش ویدیو است",
+    ),
+    "completed": StatusPresentation(
+        label="تکمیل شده",
+        badge_class="badge-success",
+        progress_description="پردازش ویدیو با موفقیت پایان یافت",
+    ),
+    "failed": StatusPresentation(
+        label="ناموفق",
+        badge_class="badge-danger",
+        progress_description="پردازش ویدیو به دلیل خطا متوقف شد",
+    ),
+}
+
+DEFAULT_PRESENTATION = StatusPresentation(
+    label="نامشخص",
+    badge_class="badge-secondary",
+    progress_description="در انتظار دریافت وضعیت از سرویس تولید ویدیو",
+)
 
 
 @dataclass(slots=True)
@@ -25,10 +72,43 @@ class ManualVideoPresenter:
     templates: Jinja2Templates
     logger: logging.Logger = logging.getLogger("app.ui.manual_video")
 
-    def _load_recent_jobs(self, db: Session) -> tuple[list[models.Job], str | None]:
+    def _build_job_view(self, job: models.Job) -> ManualVideoJobView:
+        status_raw = (job.status or "").strip().lower()
+        presentation = STATUS_PRESENTATIONS.get(status_raw, DEFAULT_PRESENTATION)
+
+        progress_value = getattr(job, "progress_percent", 0) or 0
+        try:
+            progress = int(progress_value)
+        except (TypeError, ValueError):  # pragma: no cover - defensive guard
+            progress = 0
+        progress = max(0, min(100, progress))
+
+        if status_raw == "completed":
+            progress = 100
+        elif status_raw == "failed" and progress < 100:
+            progress = 100
+
+        campaign_name = job.campaign.name if job.campaign else None
+
+        return ManualVideoJobView(
+            title=job.title,
+            campaign_name=campaign_name,
+            status_label=presentation.label,
+            status_badge_class=presentation.badge_class,
+            progress_percent=progress,
+            progress_description=presentation.progress_description,
+            created_at=job.created_at,
+        )
+
+    def _load_recent_jobs(
+        self, db: Session, *, limit: int = 10
+    ) -> tuple[list[ManualVideoJobView], str | None]:
         service = JobQueryService(db)
         try:
-            jobs = list(service.list_recent_jobs())
+            jobs = [
+                self._build_job_view(job)
+                for job in service.list_recent_jobs(limit=limit)
+            ]
             return jobs, None
         except DatabaseServiceError as exc:
             self.logger.error("Failed to load recent jobs", exc_info=exc)

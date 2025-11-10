@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -123,6 +123,9 @@ class ManualVideoPresenter:
     logger: logging.Logger = logging.getLogger("app.ui.manual_video")
     static_root: Path = Path("app/ui/static")
     preview_storage_dir: Path = Path("app/ui/static/manual_videos")
+    _ai_tools: tuple[str, ...] = field(
+        default_factory=lambda: tuple(tool.name for tool in TOOLS)
+    )
 
     def _resolve_stage(self, status: str, progress: int) -> tuple[str, str]:
         normalized_status = (status or "").strip().lower()

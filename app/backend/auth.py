@@ -6,6 +6,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from . import models
+from .services.data_access import AdminUserService
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -58,16 +59,9 @@ def require_user(
 
 
 def ensure_default_admin(db: Session) -> models.AdminUser:
-    user = db.query(models.AdminUser).filter_by(username="admin").first()
-    if user:
-        return user
-    default_user = models.AdminUser(
+    service = AdminUserService(db)
+    return service.ensure_default_admin(
         username="admin",
         password_hash=hash_password("admin123"),
         role=models.AdminRole.SUPERADMIN,
-        created_at=datetime.utcnow(),
     )
-    db.add(default_user)
-    db.commit()
-    db.refresh(default_user)
-    return default_user

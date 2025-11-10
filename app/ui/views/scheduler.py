@@ -57,6 +57,11 @@ def create_router(presenter: SchedulerPresenter) -> APIRouter:
         user = auth.get_logged_in_user(request, db)
         if not user:
             return RedirectResponse(url="/login", status_code=302)
-        return presenter.delete_schedule(db=db, user=user, post_id=post_id)
+        return presenter.delete_schedule(
+            request=request,
+            db=db,
+            user=user,
+            post_id=post_id,
+        )
 
     return router

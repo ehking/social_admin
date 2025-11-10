@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.backend import auth, models
+from app.backend.services.data_access import AdminUserService, DatabaseServiceError
 
 
 @dataclass(slots=True)
@@ -40,7 +41,24 @@ class AuthPresenter:
         username = form.get("username", "").strip()
         password = form.get("password", "")
 
-        user = db.query(models.AdminUser).filter_by(username=username).first()
+        admin_service = AdminUserService(db)
+        try:
+            user = admin_service.get_by_username(username)
+        except DatabaseServiceError as exc:
+            self.logger.error(
+                "Failed to load user during login",
+                extra={"username": username},
+                exc_info=exc,
+            )
+            return self.templates.TemplateResponse(
+                "login.html",
+                {
+                    "request": request,
+                    "error": "ورود به دلیل خطای پایگاه داده ممکن نیست. لطفاً مجدداً تلاش کنید.",
+                },
+                status_code=500,
+            )
+
         if not user or not auth.verify_password(password, user.password_hash):
             self.logger.warning(
                 "Failed login attempt",

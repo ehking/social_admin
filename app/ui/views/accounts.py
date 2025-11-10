@@ -75,6 +75,11 @@ def create_router(presenter: AccountsPresenter) -> APIRouter:
         user = auth.get_logged_in_user(request, db)
         if not user:
             return RedirectResponse(url="/login", status_code=302)
-        return presenter.delete_account(db=db, user=user, account_id=account_id)
+        return presenter.delete_account(
+            request=request,
+            db=db,
+            user=user,
+            account_id=account_id,
+        )
 
     return router

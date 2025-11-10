@@ -35,7 +35,14 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
         if not user:
             return RedirectResponse(url="/login", status_code=302)
-        return presenter.save_token(db=db, user=user, name=name, key=key, value=value)
+        return presenter.save_token(
+            request=request,
+            db=db,
+            user=user,
+            name=name,
+            key=key,
+            value=value,
+        )
 
     @router.post("/settings/delete")
     async def delete_token(
@@ -46,6 +53,11 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
         if not user:
             return RedirectResponse(url="/login", status_code=302)
-        return presenter.delete_token(db=db, user=user, token_id=token_id)
+        return presenter.delete_token(
+            request=request,
+            db=db,
+            user=user,
+            token_id=token_id,
+        )
 
     return router

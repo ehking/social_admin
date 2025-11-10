@@ -265,21 +265,69 @@ class JobProcessor:
                 context={"media_id": media.id, "media_url": url, "error": str(exc)},
             ) from exc
 
-        if response.status_code >= 400:
+        status_code = response.status_code
+        if status_code in {405, 501}:
+            response.close()
+            return self._verify_remote_with_get(url, media)
+
+        response.close()
+
+        if status_code >= 400:
             raise JobProcessingError(
                 "Remote media URL responded with an error",
                 code="bad_status",
                 context={
                     "media_id": media.id,
                     "media_url": url,
-                    "status_code": response.status_code,
+                    "status_code": status_code,
+                    "method": "HEAD",
                 },
             )
 
         return {
             "media_id": media.id,
             "media_url": url,
-            "status_code": response.status_code,
+            "status_code": status_code,
+            "method": "HEAD",
+        }
+
+    def _verify_remote_with_get(self, url: str, media: JobMedia) -> Dict[str, object]:
+        """Fallback when remote servers reject HEAD requests."""
+
+        try:
+            response: Response = requests.get(
+                url,
+                timeout=self.request_timeout,
+                allow_redirects=True,
+                stream=True,
+            )
+        except requests.RequestException as exc:  # pragma: no cover - network errors vary
+            raise JobProcessingError(
+                "Unable to reach remote media URL",
+                code="network_error",
+                context={"media_id": media.id, "media_url": url, "error": str(exc)},
+            ) from exc
+
+        status_code = response.status_code
+        response.close()
+
+        if status_code >= 400:
+            raise JobProcessingError(
+                "Remote media URL responded with an error",
+                code="bad_status",
+                context={
+                    "media_id": media.id,
+                    "media_url": url,
+                    "status_code": status_code,
+                    "method": "GET",
+                },
+            )
+
+        return {
+            "media_id": media.id,
+            "media_url": url,
+            "status_code": status_code,
+            "method": "GET",
         }
 
     def _localize_error_message(self, code: str, *, default: str) -> str:

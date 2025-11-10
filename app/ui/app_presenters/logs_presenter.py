@@ -92,11 +92,12 @@ class LogsPresenter:
 
         entries: List[Dict[str, Any]] = []
         for line in reversed(list(lines)):
-            entry = self._parse_log_line(line)
+            entry = self.parse_log_line(line)
             entries.append(entry)
         return entries
 
-    def _parse_log_line(self, line: str) -> Dict[str, Any]:
+    def parse_log_line(self, line: str) -> Dict[str, Any]:
+        """Parse a raw JSON log line into a dictionary for rendering."""
         try:
             data = json.loads(line)
         except json.JSONDecodeError:

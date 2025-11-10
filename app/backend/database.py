@@ -75,6 +75,11 @@ def run_startup_migrations() -> None:
                     )
                 )
 
+            if "error_details" not in job_columns:
+                connection.execute(
+                    text("ALTER TABLE jobs ADD COLUMN error_details TEXT")
+                )
+
         if "job_media" in tables:
             job_media_columns = {
                 column["name"] for column in inspector.get_columns("job_media")

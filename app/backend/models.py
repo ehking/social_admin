@@ -127,6 +127,7 @@ class Job(Base):
     progress_percent = Column(Integer, default=0, nullable=False)
     scheduled_time = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    error_details = Column(Text, nullable=True)
 
     media = relationship("JobMedia", back_populates="job", cascade="all, delete-orphan")
     campaign = relationship(

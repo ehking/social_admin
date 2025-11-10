@@ -61,6 +61,7 @@ def test_media_defaults_to_job_title_when_name_missing():
 
         assert persisted_job is not None
         assert persisted_job.progress_percent == 0
+        assert persisted_job.error_details is None
         assert persisted_job.media, "Job should have related media"
         assert persisted_job.media[0].job_name == "Social Clip"
         assert persisted_job.ai_tool == "Synthesia"
@@ -88,6 +89,7 @@ def test_media_storage_key_defaults_to_derived_value_when_missing():
 
         assert persisted_job is not None
         assert persisted_job.progress_percent == 0
+        assert persisted_job.error_details is None
         assert persisted_job.media, "Job should have related media"
         assert (
             persisted_job.media[0].storage_key
@@ -118,6 +120,7 @@ def test_media_storage_key_handles_trailing_slash_urls():
 
         assert persisted_job is not None
         assert persisted_job.progress_percent == 0
+        assert persisted_job.error_details is None
         assert persisted_job.media, "Job should have related media"
         assert persisted_job.media[0].storage_key == "github.com"
         assert persisted_job.ai_tool == "Midjourney"

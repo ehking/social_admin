@@ -102,6 +102,7 @@
                         <th>ابزار هوش مصنوعی</th>
                         <th>وضعیت</th>
                         <th>مرحله جاری</th>
+                        <th>جزئیات خطا</th>
                         <th>پیشرفت</th>
                         <th>پیش‌نمایش</th>
                         <th>تاریخ ایجاد</th>
@@ -119,6 +120,18 @@
                                     <strong>{{ job.stage_label }}</strong>
                                     <p class="job-stage-hint">{{ job.stage_hint }}</p>
                                 </div>
+                            </td>
+                            <td>
+                                {% if job.error_message %}
+                                    <div class="job-error">
+                                        <span class="job-error-message">{{ job.error_message }}</span>
+                                        {% if job.error_code %}
+                                            <span class="job-error-code">({{ job.error_code }})</span>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="empty">-</span>
+                                {% endif %}
                             </td>
                             <td>
                                 <div class="status-progress" aria-label="پیشرفت پردازش">

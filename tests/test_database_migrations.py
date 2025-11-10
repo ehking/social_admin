@@ -79,6 +79,31 @@ def legacy_engine_without_media_url(tmp_path, monkeypatch):
     engine.dispose()
 
 
+@pytest.fixture
+def legacy_engine_without_job_error(tmp_path, monkeypatch):
+    db_path = tmp_path / "legacy-jobs.db"
+    engine = create_engine(
+        f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
+    )
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE jobs ("
+                "id INTEGER PRIMARY KEY,"
+                "title VARCHAR(150) NOT NULL,"
+                "status VARCHAR(50),"
+                "progress_percent INTEGER,"
+                "created_at DATETIME"
+                ")"
+            )
+        )
+
+    monkeypatch.setattr(database, "engine", engine)
+    yield engine
+    engine.dispose()
+
+
 def test_run_startup_migrations_adds_missing_role_column(legacy_engine):
     database.run_startup_migrations()
 
@@ -114,3 +139,12 @@ def test_run_startup_migrations_adds_media_url_column(
         columns = connection.execute(text("PRAGMA table_info(job_media)")).fetchall()
         column_names = {column[1] for column in columns}
         assert "media_url" in column_names
+
+
+def test_run_startup_migrations_adds_job_error_column(legacy_engine_without_job_error):
+    database.run_startup_migrations()
+
+    with legacy_engine_without_job_error.begin() as connection:
+        columns = connection.execute(text("PRAGMA table_info(jobs)")).fetchall()
+        column_names = {column[1] for column in columns}
+        assert "error_details" in column_names

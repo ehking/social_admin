@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 from types import SimpleNamespace
 
 import pathlib
@@ -43,6 +44,7 @@ def test_build_job_view_includes_stage_and_preview(tmp_path):
     assert view.stage_hint.startswith("ویدیو در حال رندر")
     assert view.media_preview_url == "https://cdn.example/video.mp4"
     assert view.local_preview_url is None
+    assert view.error_message is None
 
     presenter.preview_storage_dir.mkdir(parents=True, exist_ok=True)
     local_file = presenter.preview_storage_dir / "job-42.mp4"
@@ -51,6 +53,33 @@ def test_build_job_view_includes_stage_and_preview(tmp_path):
     view_with_local = presenter._build_job_view(job)
     assert view_with_local.local_preview_url == "/static/manual_videos/job-42.mp4"
     assert view_with_local.local_preview_path == str(local_file.resolve())
+    assert view_with_local.error_message is None
+
+
+def test_build_job_view_includes_error_details(tmp_path):
+    presenter = _create_presenter(tmp_path)
+
+    error_payload = {
+        "message": "فایل رسانه پیدا نشد.",
+        "code": "missing_file",
+    }
+
+    job = SimpleNamespace(
+        id=77,
+        title="نمونه",
+        campaign=None,
+        status="failed",
+        progress_percent=35,
+        created_at=None,
+        media=[],
+        error_details=json.dumps(error_payload, ensure_ascii=False),
+    )
+
+    view = presenter._build_job_view(job)
+    assert view.error_message == "فایل رسانه پیدا نشد."
+    assert view.error_code == "missing_file"
+    assert view.stage_hint == "فایل رسانه پیدا نشد."
+    assert view.progress_percent == 100
 
 
 def test_download_manual_video_preview_persists_file(monkeypatch, tmp_path):

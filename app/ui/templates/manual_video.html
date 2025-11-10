@@ -91,7 +91,9 @@
                         <th>عنوان</th>
                         <th>کمپین</th>
                         <th>وضعیت</th>
+                        <th>مرحله جاری</th>
                         <th>پیشرفت</th>
+                        <th>پیش‌نمایش</th>
                         <th>تاریخ ایجاد</th>
                     </tr>
                 </thead>
@@ -101,6 +103,12 @@
                             <td>{{ job.title }}</td>
                             <td>{{ job.campaign_name or '-' }}</td>
                             <td><span class="badge {{ job.status_badge_class }}">{{ job.status_label }}</span></td>
+                            <td>
+                                <div class="job-stage">
+                                    <strong>{{ job.stage_label }}</strong>
+                                    <p class="job-stage-hint">{{ job.stage_hint }}</p>
+                                </div>
+                            </td>
                             <td>
                                 <div class="status-progress" aria-label="پیشرفت پردازش">
                                     <div
@@ -117,6 +125,23 @@
                                         <span class="progress-description">{{ job.progress_description }}</span>
                                     </div>
                                 </div>
+                            </td>
+                            <td>
+                                {% if job.local_preview_url or job.media_preview_url %}
+                                    <div class="job-preview">
+                                        <video
+                                            controls
+                                            preload="metadata"
+                                            src="{{ job.local_preview_url or job.media_preview_url }}"
+                                            class="job-preview-video"
+                                        ></video>
+                                        {% if job.local_preview_path %}
+                                            <small class="job-preview-path">مسیر ذخیره سازی: {{ job.local_preview_path }}</small>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="empty">پیش‌نمایشی موجود نیست</span>
+                                {% endif %}
                             </td>
                             <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '' }}</td>
                         </tr>

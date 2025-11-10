@@ -444,6 +444,24 @@ tr:last-child td {
     gap: 6px;
 }
 
+.job-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+}
+
+.job-stage strong {
+    font-size: 14px;
+    color: var(--text);
+}
+
+.job-stage-hint {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
 .progress-track {
     position: relative;
     height: 6px;
@@ -475,6 +493,26 @@ tr:last-child td {
 
 .progress-description {
     max-width: 70%;
+    line-height: 1.4;
+}
+
+.job-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 220px;
+}
+
+.job-preview-video {
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: #000;
+}
+
+.job-preview-path {
+    display: block;
+    color: var(--muted);
     line-height: 1.4;
 }
 

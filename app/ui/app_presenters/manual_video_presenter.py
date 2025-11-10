@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -15,6 +17,11 @@ from sqlalchemy.orm import Session
 from app.backend import models
 from app.backend.services import create_job_with_media_and_campaign
 from app.backend.services.data_access import DatabaseServiceError, JobQueryService
+
+try:  # pragma: no cover - optional dependency in minimal test environments
+    import requests
+except Exception:  # pragma: no cover - fallback when requests unavailable
+    requests = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +39,11 @@ class ManualVideoJobView:
     status_badge_class: str
     progress_percent: int
     progress_description: str
+    stage_label: str
+    stage_hint: str
+    media_preview_url: Optional[str]
+    local_preview_url: Optional[str]
+    local_preview_path: Optional[str]
     created_at: Optional[datetime]
 
 
@@ -107,6 +119,60 @@ class ManualVideoPresenter:
 
     templates: Jinja2Templates
     logger: logging.Logger = logging.getLogger("app.ui.manual_video")
+    static_root: Path = Path("app/ui/static")
+    preview_storage_dir: Path = Path("app/ui/static/manual_videos")
+
+    def _resolve_stage(self, status: str, progress: int) -> tuple[str, str]:
+        normalized_status = (status or "").strip().lower()
+
+        if normalized_status == "completed":
+            return "ویدیو آماده است", "خروجی نهایی با موفقیت ذخیره شد."
+        if normalized_status == "failed":
+            return "پردازش متوقف شد", "برای بررسی بیشتر لاگ‌های سیستم را بررسی کنید."
+
+        if normalized_status == "processing":
+            if progress < 30:
+                return "آماده‌سازی", "در حال آماده‌سازی پیش‌نیازهای پردازش ویدیو."
+            if progress < 70:
+                return "رندر ویدیو", "ویدیو در حال رندر و ترکیب اجزای مختلف است."
+            return "بارگذاری", "ویدیو در حال ذخیره‌سازی و بارگذاری در مقصد نهایی است."
+
+        return "در صف انتظار", "وظیفه در صف پردازش قرار دارد."
+
+    def _derive_media_preview_url(self, job: models.Job) -> Optional[str]:
+        if not job.media:
+            return None
+        primary_media = job.media[0]
+        for attribute in ("storage_url", "media_url"):
+            value = getattr(primary_media, attribute, None)
+            if value:
+                trimmed = str(value).strip()
+                if trimmed:
+                    return trimmed
+        return None
+
+    def _find_local_preview(self, job_id: int) -> tuple[Optional[str], Optional[str]]:
+        directory = self.preview_storage_dir
+        if not directory.exists():
+            return None, None
+
+        try:
+            candidates = sorted(directory.glob(f"job-{job_id}*"))
+        except OSError:
+            return None, None
+
+        for candidate in candidates:
+            if not candidate.is_file():
+                continue
+            try:
+                relative = candidate.relative_to(self.static_root)
+            except ValueError:
+                web_path = None
+            else:
+                web_path = f"/static/{relative.as_posix()}"
+            return web_path, str(candidate.resolve())
+
+        return None, None
 
     def _build_job_view(self, job: models.Job) -> ManualVideoJobView:
         status_raw = (job.status or "").strip().lower()
@@ -126,6 +192,13 @@ class ManualVideoPresenter:
 
         campaign_name = job.campaign.name if job.campaign else None
 
+        stage_label, stage_hint = self._resolve_stage(status_raw, progress)
+
+        media_preview_url = self._derive_media_preview_url(job)
+        local_preview_url, local_preview_path = (None, None)
+        if job.id is not None:
+            local_preview_url, local_preview_path = self._find_local_preview(job.id)
+
         return ManualVideoJobView(
             title=job.title,
             campaign_name=campaign_name,
@@ -133,6 +206,11 @@ class ManualVideoPresenter:
             status_badge_class=presentation.badge_class,
             progress_percent=progress,
             progress_description=presentation.progress_description,
+            stage_label=stage_label,
+            stage_hint=stage_hint,
+            media_preview_url=media_preview_url,
+            local_preview_url=local_preview_url,
+            local_preview_path=local_preview_path,
             created_at=job.created_at,
         )
 
@@ -162,6 +240,49 @@ class ManualVideoPresenter:
         if load_error:
             context["error"] = load_error
         return self.templates.TemplateResponse("manual_video.html", context)
+
+    @staticmethod
+    def _should_download_media(url: str) -> bool:
+        parsed = urlparse(url)
+        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+    def _download_manual_video_preview(self, url: str, *, job_id: int) -> Optional[Path]:
+        if requests is None:
+            self.logger.warning(
+                "requests library is unavailable; cannot download manual video preview",
+                extra={"url": url},
+            )
+            return None
+
+        try:
+            response = requests.get(url, timeout=15, stream=True)
+            response.raise_for_status()
+        except Exception as exc:  # pragma: no cover - defensive for network errors
+            self.logger.warning(
+                "Failed to download manual video preview",
+                extra={"url": url, "error": str(exc)},
+            )
+            return None
+
+        parsed = urlparse(url)
+        suffix = Path(parsed.path).suffix or ".mp4"
+        target_dir = self.preview_storage_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / f"job-{job_id}{suffix}"
+
+        try:
+            with target_path.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        handle.write(chunk)
+        except Exception as exc:  # pragma: no cover - defensive for IO errors
+            self.logger.error(
+                "Failed to persist manual video preview",
+                extra={"url": url, "destination": str(target_path), "error": str(exc)},
+            )
+            return None
+
+        return target_path
 
     def create_manual_video(
         self,
@@ -201,8 +322,10 @@ class ManualVideoPresenter:
                 "manual_video.html", context, status_code=400
             )
 
+        job = None
+
         try:
-            create_job_with_media_and_campaign(
+            job = create_job_with_media_and_campaign(
                 job_payload={
                     "title": clean_title,
                     "description": clean_description,
@@ -237,6 +360,20 @@ class ManualVideoPresenter:
             return self.templates.TemplateResponse(
                 "manual_video.html", context, status_code=400
             )
+
+        if job and job.id and self._should_download_media(clean_media_url):
+            local_path = self._download_manual_video_preview(
+                clean_media_url, job_id=job.id
+            )
+            if local_path:
+                self.logger.info(
+                    "Manual video preview saved locally",
+                    extra={
+                        "user_id": user.id,
+                        "job_id": job.id,
+                        "local_path": str(local_path),
+                    },
+                )
 
         self.logger.info(
             "Manual video job created",

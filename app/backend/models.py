@@ -122,6 +122,7 @@ class Job(Base):
     title = Column(String(150), nullable=False)
     description = Column(Text, nullable=True)
     status = Column(String(50), default="pending")
+    progress_percent = Column(Integer, default=0, nullable=False)
     scheduled_time = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

@@ -56,6 +56,17 @@ def run_startup_migrations() -> None:
                 {"default_role": default_role},
             )
 
+        if "jobs" in tables:
+            job_columns = {column["name"] for column in inspector.get_columns("jobs")}
+
+            if "progress_percent" not in job_columns:
+                connection.execute(
+                    text(
+                        "ALTER TABLE jobs ADD COLUMN progress_percent INTEGER "
+                        "DEFAULT 0 NOT NULL"
+                    )
+                )
+
         if "job_media" in tables:
             job_media_columns = {
                 column["name"] for column in inspector.get_columns("job_media")

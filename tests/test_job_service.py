@@ -52,6 +52,7 @@ def test_media_defaults_to_job_title_when_name_missing():
         persisted_job = session.get(Job, job.id)
 
         assert persisted_job is not None
+        assert persisted_job.progress_percent == 0
         assert persisted_job.media, "Job should have related media"
         assert persisted_job.media[0].job_name == "Social Clip"
 
@@ -73,6 +74,7 @@ def test_media_storage_key_defaults_to_derived_value_when_missing():
         persisted_job = session.get(Job, job.id)
 
         assert persisted_job is not None
+        assert persisted_job.progress_percent == 0
         assert persisted_job.media, "Job should have related media"
         assert (
             persisted_job.media[0].storage_key
@@ -97,5 +99,6 @@ def test_media_storage_key_handles_trailing_slash_urls():
         persisted_job = session.get(Job, job.id)
 
         assert persisted_job is not None
+        assert persisted_job.progress_percent == 0
         assert persisted_job.media, "Job should have related media"
         assert persisted_job.media[0].storage_key == "github.com"

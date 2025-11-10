@@ -351,9 +351,54 @@ tr:last-child td {
     color: var(--danger);
 }
 
+.badge-success {
+    background: rgba(22, 163, 74, 0.12);
+    color: var(--success);
+}
+
 .badge-secondary {
     background: rgba(15, 23, 42, 0.12);
     color: var(--text);
+}
+
+.status-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.progress-track {
+    position: relative;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.12);
+    overflow: hidden;
+}
+
+.progress-value {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, var(--accent), #22d3ee);
+    transition: width 0.3s ease;
+}
+
+.progress-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.progress-percent {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.progress-description {
+    max-width: 70%;
+    line-height: 1.4;
 }
 
 .chips {

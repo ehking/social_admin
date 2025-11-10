@@ -72,10 +72,14 @@ class JobService:
 
         return f"job-{job_id}-media-{media_index}"
 
-    @staticmethod
-    def _validate_campaign_payload(campaign_payload: Mapping[str, object]) -> None:
-        if not campaign_payload.get("name"):
+    @classmethod
+    def _validate_campaign_payload(
+        cls, campaign_payload: Mapping[str, object]
+    ) -> str:
+        name = cls._normalize_string(campaign_payload.get("name"))
+        if not name:
             raise ValueError("Campaign requires a 'name'.")
+        return name
 
     def create_job_with_media_and_campaign(
         self,
@@ -134,8 +138,10 @@ class JobService:
                         extra={"job_id": job.id, "media_type": payload.get("media_type")},
                     )
 
-                self._validate_campaign_payload(campaign_payload)
-                campaign = Campaign(job=job, **campaign_payload)
+                campaign_name = self._validate_campaign_payload(campaign_payload)
+                campaign_data = dict(campaign_payload)
+                campaign_data["name"] = campaign_name
+                campaign = Campaign(job=job, **campaign_data)
                 session.add(campaign)
                 logger.debug(
                     "Campaign associated with job",

@@ -53,11 +53,14 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         if not user:
             logger.info("Token save denied for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
-        logger.info(
-            "Saving integration token",
-            extra={"user_id": user.id, "token_name": name},
+        return presenter.save_token(
+            request=request,
+            db=db,
+            user=user,
+            name=name,
+            key=key,
+            value=value,
         )
-        return presenter.save_token(db=db, user=user, name=name, key=key, value=value)
 
     @router.post("/settings/delete")
     async def delete_token(
@@ -74,11 +77,12 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         if not user:
             logger.info("Token delete denied for unauthenticated user", extra={"token_id": token_id})
             return RedirectResponse(url="/login", status_code=302)
-        logger.info(
-            "Deleting integration token",
-            extra={"user_id": user.id, "token_id": token_id},
+        return presenter.delete_token(
+            request=request,
+            db=db,
+            user=user,
+            token_id=token_id,
         )
-        return presenter.delete_token(db=db, user=user, token_id=token_id)
 
     @router.post("/settings/permissions")
     async def update_permissions(request: Request, db: Session = Depends(get_db)):

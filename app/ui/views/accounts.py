@@ -122,10 +122,11 @@ def create_router(presenter: AccountsPresenter) -> APIRouter:
                 extra={"account_id": account_id},
             )
             return RedirectResponse(url="/login", status_code=302)
-        logger.info(
-            "Deleting account",
-            extra={"user_id": user.id, "account_id": account_id},
+        return presenter.delete_account(
+            request=request,
+            db=db,
+            user=user,
+            account_id=account_id,
         )
-        return presenter.delete_account(db=db, user=user, account_id=account_id)
 
     return router

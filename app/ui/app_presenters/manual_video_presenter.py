@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.backend import models
 from app.backend.services import create_job_with_media_and_campaign
+from app.backend.services.data_access import DatabaseServiceError, JobQueryService
 
 from .helpers import build_layout_context
 
@@ -24,15 +25,25 @@ class ManualVideoPresenter:
     templates: Jinja2Templates
     logger: logging.Logger = logging.getLogger("app.ui.manual_video")
 
+    def _load_recent_jobs(self, db: Session) -> tuple[list[models.Job], str | None]:
+        service = JobQueryService(db)
+        try:
+            jobs = list(service.list_recent_jobs())
+            return jobs, None
+        except DatabaseServiceError as exc:
+            self.logger.error("Failed to load recent jobs", exc_info=exc)
+            return [], "بارگذاری لیست وظایف با خطا مواجه شد."
+
     def render(self, request: Request, user: models.AdminUser, db: Session) -> object:
-        jobs = db.query(models.Job).order_by(models.Job.created_at.desc()).all()
-        context = build_layout_context(
-            request=request,
-            user=user,
-            db=db,
-            active_page="manual_video",
-            jobs=jobs,
-        )
+        jobs, load_error = self._load_recent_jobs(db)
+        context = {
+            "request": request,
+            "user": user,
+            "jobs": jobs,
+            "active_page": "manual_video",
+        }
+        if load_error:
+            context["error"] = load_error
         return self.templates.TemplateResponse("manual_video.html", context)
 
     def create_manual_video(
@@ -57,16 +68,17 @@ class ManualVideoPresenter:
             campaign_description.strip() if campaign_description else None
         )
 
+        jobs, load_error = self._load_recent_jobs(db)
         if not clean_title or not clean_media_url or not clean_campaign_name:
-            jobs = db.query(models.Job).order_by(models.Job.created_at.desc()).all()
-            context = build_layout_context(
-                request=request,
-                user=user,
-                db=db,
-                active_page="manual_video",
-                jobs=jobs,
-                error="عنوان، لینک ویدیو و نام کمپین الزامی هستند.",
-            )
+            context = {
+                "request": request,
+                "user": user,
+                "jobs": jobs,
+                "error": "عنوان، لینک ویدیو و نام کمپین الزامی هستند.",
+                "active_page": "manual_video",
+            }
+            if load_error:
+                context.setdefault("load_error", load_error)
             return self.templates.TemplateResponse(
                 "manual_video.html", context, status_code=400
             )
@@ -93,15 +105,16 @@ class ManualVideoPresenter:
             self.logger.warning(
                 "Validation error while creating manual video", extra={"error": str(exc)}
             )
-            jobs = db.query(models.Job).order_by(models.Job.created_at.desc()).all()
-            context = build_layout_context(
-                request=request,
-                user=user,
-                db=db,
-                active_page="manual_video",
-                jobs=jobs,
-                error="ثبت ویدیو با خطا مواجه شد: " + str(exc),
-            )
+            jobs, load_error = self._load_recent_jobs(db)
+            context = {
+                "request": request,
+                "user": user,
+                "jobs": jobs,
+                "error": "ثبت ویدیو با خطا مواجه شد: " + str(exc),
+                "active_page": "manual_video",
+            }
+            if load_error:
+                context.setdefault("load_error", load_error)
             return self.templates.TemplateResponse(
                 "manual_video.html", context, status_code=400
             )

@@ -13,6 +13,11 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.backend import models
+from app.backend.services.data_access import (
+    DatabaseServiceError,
+    ScheduledPostService,
+    SocialAccountService,
+)
 
 from .helpers import build_layout_context
 
@@ -24,21 +29,37 @@ class SchedulerPresenter:
     templates: Jinja2Templates
     logger: logging.Logger = logging.getLogger("app.ui.scheduler")
 
+    def _load_accounts(self, db: Session) -> tuple[list[models.SocialAccount], str | None]:
+        service = SocialAccountService(db)
+        try:
+            accounts = list(service.list_accounts_desc())
+            return accounts, None
+        except DatabaseServiceError as exc:
+            self.logger.error("Failed to load accounts for scheduler", exc_info=exc)
+            return [], "بارگذاری حساب‌ها با خطا مواجه شد."
+
+    def _load_posts(self, db: Session) -> tuple[list[models.ScheduledPost], str | None]:
+        service = ScheduledPostService(db)
+        try:
+            posts = list(service.list_recent_posts())
+            return posts, None
+        except DatabaseServiceError as exc:
+            self.logger.error("Failed to load scheduled posts", exc_info=exc)
+            return [], "بارگذاری پست‌های زمان‌بندی شده با خطا مواجه شد."
+
     def render(self, request: Request, user: models.AdminUser, db: Session) -> object:
-        accounts = db.query(models.SocialAccount).all()
-        posts = (
-            db.query(models.ScheduledPost)
-            .order_by(models.ScheduledPost.scheduled_time.desc())
-            .all()
-        )
-        context = build_layout_context(
-            request=request,
-            user=user,
-            db=db,
-            active_page="scheduler",
-            accounts=accounts,
-            posts=posts,
-        )
+        accounts, account_error = self._load_accounts(db)
+        posts, post_error = self._load_posts(db)
+        errors = [msg for msg in (account_error, post_error) if msg]
+        context = {
+            "request": request,
+            "user": user,
+            "accounts": accounts,
+            "posts": posts,
+            "active_page": "scheduler",
+        }
+        if errors:
+            context["error"] = " ".join(dict.fromkeys(errors))
         return self.templates.TemplateResponse("scheduler.html", context)
 
     def create_schedule(
@@ -59,39 +80,58 @@ class SchedulerPresenter:
         try:
             schedule_dt = datetime.fromisoformat(raw_time)
         except ValueError:
-            accounts = db.query(models.SocialAccount).all()
-            posts = (
-                db.query(models.ScheduledPost)
-                .order_by(models.ScheduledPost.scheduled_time.desc())
-                .all()
-            )
+            accounts, account_error = self._load_accounts(db)
+            posts, post_error = self._load_posts(db)
             self.logger.warning(
                 "Invalid schedule timestamp provided",
                 extra={"user_id": user.id, "account_id": account_id, "value": scheduled_time},
             )
-            context = build_layout_context(
-                request=request,
-                user=user,
-                db=db,
-                active_page="scheduler",
-                accounts=accounts,
-                posts=posts,
-                error="فرمت تاریخ/زمان نامعتبر است.",
-            )
+            context = {
+                "request": request,
+                "user": user,
+                "accounts": accounts,
+                "posts": posts,
+                "error": "فرمت تاریخ/زمان نامعتبر است.",
+                "active_page": "scheduler",
+            }
+            extra_errors = [msg for msg in (account_error, post_error) if msg]
+            if extra_errors:
+                context.setdefault("load_error", " ".join(dict.fromkeys(extra_errors)))
             return self.templates.TemplateResponse("scheduler.html", context, status_code=400)
 
         text_content = content.strip() or None if content else None
         video_link = video_url.strip() or None if video_url else None
 
-        post = models.ScheduledPost(
-            account_id=account_id,
-            title=title,
-            content=text_content,
-            video_url=video_link,
-            scheduled_time=schedule_dt,
-        )
-        db.add(post)
-        db.commit()
+        service = ScheduledPostService(db)
+        try:
+            post = service.create_post(
+                account_id=account_id,
+                title=title,
+                content=text_content,
+                video_url=video_link,
+                scheduled_time=schedule_dt,
+            )
+        except DatabaseServiceError as exc:
+            self.logger.error(
+                "Failed to create scheduled post",
+                extra={"user_id": user.id, "account_id": account_id},
+                exc_info=exc,
+            )
+            accounts, account_error = self._load_accounts(db)
+            posts, post_error = self._load_posts(db)
+            context = {
+                "request": request,
+                "user": user,
+                "accounts": accounts,
+                "posts": posts,
+                "error": "ثبت برنامه انتشار با خطا مواجه شد.",
+                "active_page": "scheduler",
+            }
+            extra_errors = [msg for msg in (account_error, post_error) if msg]
+            if extra_errors:
+                context.setdefault("load_error", " ".join(dict.fromkeys(extra_errors)))
+            return self.templates.TemplateResponse("scheduler.html", context, status_code=500)
+
         self.logger.info(
             "Post scheduled",
             extra={
@@ -106,16 +146,43 @@ class SchedulerPresenter:
     def delete_schedule(
         self,
         *,
+        request: Request,
         db: Session,
         user: models.AdminUser,
         post_id: int,
-    ) -> RedirectResponse:
-        post = db.get(models.ScheduledPost, post_id)
-        if post:
-            db.delete(post)
-            db.commit()
+    ) -> RedirectResponse | object:
+        service = ScheduledPostService(db)
+        try:
+            deleted = service.delete_post(post_id)
+        except DatabaseServiceError as exc:
+            self.logger.error(
+                "Failed to delete scheduled post",
+                extra={"user_id": user.id, "post_id": post_id},
+                exc_info=exc,
+            )
+            accounts, account_error = self._load_accounts(db)
+            posts, post_error = self._load_posts(db)
+            context = {
+                "request": request,
+                "user": user,
+                "accounts": accounts,
+                "posts": posts,
+                "error": "حذف پست زمان‌بندی شده با خطا مواجه شد.",
+                "active_page": "scheduler",
+            }
+            extra_errors = [msg for msg in (account_error, post_error) if msg]
+            if extra_errors:
+                context.setdefault("load_error", " ".join(dict.fromkeys(extra_errors)))
+            return self.templates.TemplateResponse("scheduler.html", context, status_code=500)
+
+        if deleted:
             self.logger.info(
                 "Scheduled post deleted",
-                extra={"user_id": user.id, "post_id": post_id, "account_id": post.account_id},
+                extra={"user_id": user.id, "post_id": post_id},
+            )
+        else:
+            self.logger.warning(
+                "Attempted to delete non-existent scheduled post",
+                extra={"user_id": user.id, "post_id": post_id},
             )
         return RedirectResponse(url="/scheduler", status_code=302)

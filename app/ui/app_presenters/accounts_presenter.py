@@ -12,6 +12,11 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.backend import models
+from app.backend.services.data_access import (
+    DatabaseServiceError,
+    EntityNotFoundError,
+    SocialAccountService,
+)
 
 from .helpers import build_layout_context
 
@@ -23,19 +28,25 @@ class AccountsPresenter:
     templates: Jinja2Templates
     logger: logging.Logger = logging.getLogger("app.ui.accounts")
 
+    def _load_accounts(self, db: Session) -> tuple[list[models.SocialAccount], str | None]:
+        service = SocialAccountService(db)
+        try:
+            accounts = list(service.list_accounts_desc())
+            return accounts, None
+        except DatabaseServiceError as exc:
+            self.logger.error("Failed to load social accounts", exc_info=exc)
+            return [], "بارگذاری حساب‌ها با خطا مواجه شد."
+
     def list_accounts(self, request: Request, user: models.AdminUser, db: Session) -> object:
-        accounts = (
-            db.query(models.SocialAccount)
-            .order_by(models.SocialAccount.created_at.desc())
-            .all()
-        )
-        context = build_layout_context(
-            request=request,
-            user=user,
-            db=db,
-            active_page="accounts",
-            accounts=accounts,
-        )
+        accounts, load_error = self._load_accounts(db)
+        context = {
+            "request": request,
+            "user": user,
+            "accounts": accounts,
+            "active_page": "accounts",
+        }
+        if load_error:
+            context["error"] = load_error
         return self.templates.TemplateResponse("accounts.html", context)
 
     def account_form(
@@ -46,14 +57,29 @@ class AccountsPresenter:
         db: Session,
         account_id: Optional[int] = None,
     ) -> object:
-        account = db.get(models.SocialAccount, account_id) if account_id else None
-        context = build_layout_context(
-            request=request,
-            user=user,
-            db=db,
-            active_page="accounts",
-            account=account,
-        )
+        account = None
+        error_message: Optional[str] = None
+        if account_id:
+            service = SocialAccountService(db)
+            try:
+                account = service.get_account(account_id)
+            except DatabaseServiceError as exc:
+                self.logger.error(
+                    "Failed to load account form data",
+                    extra={"account_id": account_id},
+                    exc_info=exc,
+                )
+                error_message = "بارگذاری حساب انتخاب‌شده با خطا مواجه شد."
+            if account is None and error_message is None:
+                error_message = "حساب مورد نظر یافت نشد."
+        context = {
+            "request": request,
+            "user": user,
+            "account": account,
+            "active_page": "accounts",
+        }
+        if error_message:
+            context["error"] = error_message
         return self.templates.TemplateResponse("account_form.html", context)
 
     def save_account(
@@ -69,22 +95,8 @@ class AccountsPresenter:
         youtube_channel_id: Optional[str],
         telegram_chat_id: Optional[str],
         account_id: Optional[int],
-    ) -> RedirectResponse:
-        if account_id:
-            account = db.get(models.SocialAccount, int(account_id))
-            if not account:
-                self.logger.warning(
-                    "Attempted to update non-existent account",
-                    extra={"user_id": user.id, "account_id": account_id},
-                )
-                return RedirectResponse(url="/accounts", status_code=302)
-        else:
-            account = models.SocialAccount(platform=platform, display_name=display_name)
-            db.add(account)
-            self.logger.info(
-                "Creating new account",
-                extra={"user_id": user.id, "platform": platform},
-            )
+    ) -> RedirectResponse | object:
+        service = SocialAccountService(db)
 
         def _clean(value: Optional[str]) -> Optional[str]:
             if value is None:
@@ -92,16 +104,58 @@ class AccountsPresenter:
             value = value.strip()
             return value or None
 
-        account.platform = platform
-        account.display_name = display_name.strip()
-        account.page_id = _clean(page_id)
-        account.oauth_token = _clean(oauth_token)
-        account.youtube_channel_id = _clean(youtube_channel_id)
-        account.telegram_chat_id = _clean(telegram_chat_id)
+        cleaned_data = {
+            "platform": platform,
+            "display_name": display_name.strip(),
+            "page_id": _clean(page_id),
+            "oauth_token": _clean(oauth_token),
+            "youtube_channel_id": _clean(youtube_channel_id),
+            "telegram_chat_id": _clean(telegram_chat_id),
+        }
 
-        db.commit()
+        try:
+            account, created = service.save_account(
+                account_id=int(account_id) if account_id else None,
+                data=cleaned_data,
+            )
+        except EntityNotFoundError as exc:
+            self.logger.warning(
+                "Attempted to update non-existent account",
+                extra={"user_id": user.id, "account_id": account_id},
+            )
+            accounts, load_error = self._load_accounts(db)
+            context = {
+                "request": request,
+                "user": user,
+                "accounts": accounts,
+                "error": str(exc),
+                "active_page": "accounts",
+            }
+            if load_error:
+                context.setdefault("load_error", load_error)
+            return self.templates.TemplateResponse("accounts.html", context, status_code=404)
+        except DatabaseServiceError as exc:
+            self.logger.error(
+                "Failed to save account",
+                extra={"user_id": user.id, "account_id": account_id},
+                exc_info=exc,
+            )
+            accounts, load_error = self._load_accounts(db)
+            context = {
+                "request": request,
+                "user": user,
+                "accounts": accounts,
+                "error": "ذخیره حساب با خطا مواجه شد.",
+                "active_page": "accounts",
+            }
+            if load_error:
+                context.setdefault("load_error", load_error)
+            return self.templates.TemplateResponse("accounts.html", context, status_code=500)
+
+        action = "created" if created else "updated"
         self.logger.info(
-            "Account saved",
+            "Account %s",
+            action,
             extra={"user_id": user.id, "account_id": account.id, "platform": account.platform},
         )
         return RedirectResponse(url="/accounts", status_code=302)
@@ -109,16 +163,40 @@ class AccountsPresenter:
     def delete_account(
         self,
         *,
+        request: Request,
         db: Session,
         user: models.AdminUser,
         account_id: int,
-    ) -> RedirectResponse:
-        account = db.get(models.SocialAccount, account_id)
-        if account:
-            db.delete(account)
-            db.commit()
+    ) -> RedirectResponse | object:
+        service = SocialAccountService(db)
+        try:
+            deleted = service.delete_account(account_id)
+        except DatabaseServiceError as exc:
+            self.logger.error(
+                "Failed to delete account",
+                extra={"user_id": user.id, "account_id": account_id},
+                exc_info=exc,
+            )
+            accounts, load_error = self._load_accounts(db)
+            context = {
+                "request": request,
+                "user": user,
+                "accounts": accounts,
+                "error": "حذف حساب با خطا مواجه شد.",
+                "active_page": "accounts",
+            }
+            if load_error:
+                context.setdefault("load_error", load_error)
+            return self.templates.TemplateResponse("accounts.html", context, status_code=500)
+
+        if deleted:
             self.logger.info(
                 "Account deleted",
-                extra={"user_id": user.id, "account_id": account_id, "platform": account.platform},
+                extra={"user_id": user.id, "account_id": account_id},
+            )
+        else:
+            self.logger.warning(
+                "Attempted to delete non-existent account",
+                extra={"user_id": user.id, "account_id": account_id},
             )
         return RedirectResponse(url="/accounts", status_code=302)

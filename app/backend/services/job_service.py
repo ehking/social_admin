@@ -86,6 +86,8 @@ class JobService:
         job_payload: Mapping[str, object],
         media_payloads: Iterable[Mapping[str, object]],
         campaign_payload: Mapping[str, object],
+        *,
+        session: Session | None = None,
     ) -> Job:
         """Create a job and its related media and campaign inside a single transaction."""
 
@@ -99,65 +101,75 @@ class JobService:
             },
         )
 
-        with self._session_factory() as session:
-            with session.begin():
-                job = Job(**job_payload)
-                progress_value = getattr(job, "progress_percent", 0) or 0
-                try:
-                    normalized_progress = int(progress_value)
-                except (TypeError, ValueError):  # pragma: no cover - defensive guard
-                    normalized_progress = 0
-                job.progress_percent = max(0, min(100, normalized_progress))
-                session.add(job)
-                session.flush()
-                logger.debug("Job persisted", extra={"job_id": job.id})
+        owns_session = session is None
+        session_obj = session or self._session_factory()
 
-                for index, payload in enumerate(media_payloads, start=1):
-                    self._validate_media_payload(payload)
-                    media_data = dict(payload)
-                    media_type = self._normalize_string(media_data.get("media_type"))
-                    media_url = self._normalize_string(media_data.get("media_url"))
-                    storage_url = self._normalize_string(media_data.get("storage_url"))
+        try:
+            job = Job(**job_payload)
+            progress_value = getattr(job, "progress_percent", 0) or 0
+            try:
+                normalized_progress = int(progress_value)
+            except (TypeError, ValueError):  # pragma: no cover - defensive guard
+                normalized_progress = 0
+            job.progress_percent = max(0, min(100, normalized_progress))
+            session_obj.add(job)
+            session_obj.flush()
+            logger.debug("Job persisted", extra={"job_id": job.id})
 
-                    if media_type:
-                        media_data["media_type"] = media_type
-                    if media_url:
-                        media_data["media_url"] = media_url
-                    if storage_url is not None:
-                        media_data["storage_url"] = storage_url
-                    if not media_data.get("job_name"):
-                        media_data["job_name"] = job.title
-                    storage_key = self._derive_storage_key(
-                        media_data, job_id=job.id, media_index=index
-                    )
-                    media_data["storage_key"] = storage_key
-                    media = JobMedia(job=job, **media_data)
-                    session.add(media)
-                    logger.debug(
-                        "Attached media to job",
-                        extra={"job_id": job.id, "media_type": payload.get("media_type")},
-                    )
+            for index, payload in enumerate(media_payloads, start=1):
+                self._validate_media_payload(payload)
+                media_data = dict(payload)
+                media_type = self._normalize_string(media_data.get("media_type"))
+                media_url = self._normalize_string(media_data.get("media_url"))
+                storage_url = self._normalize_string(media_data.get("storage_url"))
 
-                campaign_name = self._validate_campaign_payload(campaign_payload)
-                campaign_data = dict(campaign_payload)
-                campaign_data["name"] = campaign_name
-                campaign = Campaign(job=job, **campaign_data)
-                session.add(campaign)
+                if media_type:
+                    media_data["media_type"] = media_type
+                if media_url:
+                    media_data["media_url"] = media_url
+                if storage_url is not None:
+                    media_data["storage_url"] = storage_url
+                if not media_data.get("job_name"):
+                    media_data["job_name"] = job.title
+                storage_key = self._derive_storage_key(
+                    media_data, job_id=job.id, media_index=index
+                )
+                media_data["storage_key"] = storage_key
+                media = JobMedia(job=job, **media_data)
+                session_obj.add(media)
                 logger.debug(
-                    "Campaign associated with job",
-                    extra={"job_id": job.id, "campaign_name": campaign_payload.get("name")},
+                    "Attached media to job",
+                    extra={"job_id": job.id, "media_type": payload.get("media_type")},
                 )
 
-            session.refresh(job)
-            logger.info("Job creation transaction committed", extra={"job_id": job.id})
+            campaign_name = self._validate_campaign_payload(campaign_payload)
+            campaign_data = dict(campaign_payload)
+            campaign_data["name"] = campaign_name
+            campaign = Campaign(job=job, **campaign_data)
+            session_obj.add(campaign)
+            logger.debug(
+                "Campaign associated with job",
+                extra={"job_id": job.id, "campaign_name": campaign_payload.get("name")},
+            )
 
-        return job
+            session_obj.commit()
+            session_obj.refresh(job)
+            logger.info("Job creation transaction committed", extra={"job_id": job.id})
+            return job
+        except Exception:
+            session_obj.rollback()
+            raise
+        finally:
+            if owns_session:
+                session_obj.close()
 
 
 def create_job_with_media_and_campaign(
     job_payload: Mapping[str, object],
     media_payloads: Iterable[Mapping[str, object]],
     campaign_payload: Mapping[str, object],
+    *,
+    session: Session | None = None,
 ) -> Job:
     """Backward-compatible helper that proxies to :class:`JobService`."""
 
@@ -165,4 +177,5 @@ def create_job_with_media_and_campaign(
         job_payload=job_payload,
         media_payloads=media_payloads,
         campaign_payload=campaign_payload,
+        session=session,
     )

@@ -180,6 +180,7 @@ class ManualVideoPresenter:
                     "name": clean_campaign_name,
                     "description": clean_campaign_description,
                 },
+                session=db,
             )
         except ValueError as exc:
             self.logger.warning(

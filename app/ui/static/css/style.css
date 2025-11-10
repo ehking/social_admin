@@ -617,11 +617,42 @@ textarea {
     gap: 16px;
 }
 
+.log-stream-status {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.log-stream-status[data-state="connected"] {
+    color: var(--success);
+}
+
+.log-stream-status[data-state="disconnected"] {
+    color: var(--danger);
+}
+
+.log-stream-status[data-state="paused"] {
+    color: var(--muted);
+}
+
 .log-entry {
     background: rgba(15, 23, 42, 0.02);
     border-radius: 16px;
     padding: 0 18px 12px;
     border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.log-entry-row-new {
+    animation: log-entry-highlight 2s ease-out;
+}
+
+@keyframes log-entry-highlight {
+    0% {
+        background: rgba(99, 102, 241, 0.2);
+    }
+    100% {
+        background: transparent;
+    }
 }
 
 .log-entry summary {

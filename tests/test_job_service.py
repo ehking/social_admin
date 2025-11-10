@@ -102,3 +102,40 @@ def test_media_storage_key_handles_trailing_slash_urls():
         assert persisted_job.progress_percent == 0
         assert persisted_job.media, "Job should have related media"
         assert persisted_job.media[0].storage_key == "github.com"
+
+
+def test_campaign_payload_requires_non_empty_name():
+    job_payload = {"title": "Promo", "description": ""}
+    media_payloads = [
+        {"media_type": "image/png", "media_url": "https://cdn.example.com/banner.png"}
+    ]
+    campaign_payload = {"name": "   "}
+
+    service = JobService()
+
+    with pytest.raises(ValueError):
+        service.create_job_with_media_and_campaign(
+            job_payload, media_payloads, campaign_payload
+        )
+
+
+def test_campaign_name_is_trimmed_before_persist():
+    job_payload = {"title": "Promo Video", "description": ""}
+    media_payloads = [
+        {"media_type": "video/mp4", "media_url": "https://cdn.example.com/video.mp4"}
+    ]
+    campaign_payload = {"name": "  Launch  "}
+
+    service = JobService()
+    job = service.create_job_with_media_and_campaign(
+        job_payload, media_payloads, campaign_payload
+    )
+
+    with SessionLocal() as session:
+        campaign = (
+            session.query(Campaign)
+            .filter_by(job_id=job.id)
+            .one()
+        )
+
+        assert campaign.name == "Launch"

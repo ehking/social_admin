@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.backend import models
 from app.backend.services import create_job_with_media_and_campaign
 from app.backend.services.data_access import DatabaseServiceError, JobQueryService
+from app.backend.ai_workflow import TOOLS
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +29,7 @@ class StatusPresentation:
 class ManualVideoJobView:
     title: str
     campaign_name: Optional[str]
+    ai_tool: str
     status_label: str
     status_badge_class: str
     progress_percent: int
@@ -71,6 +73,7 @@ class ManualVideoPresenter:
 
     templates: Jinja2Templates
     logger: logging.Logger = logging.getLogger("app.ui.manual_video")
+    _ai_tools: tuple[str, ...] = tuple(sorted(tool.name for tool in TOOLS))
 
     def _build_job_view(self, job: models.Job) -> ManualVideoJobView:
         status_raw = (job.status or "").strip().lower()
@@ -90,9 +93,12 @@ class ManualVideoPresenter:
 
         campaign_name = job.campaign.name if job.campaign else None
 
+        ai_tool_value = (job.ai_tool or "").strip() if getattr(job, "ai_tool", None) else ""
+
         return ManualVideoJobView(
             title=job.title,
             campaign_name=campaign_name,
+            ai_tool=ai_tool_value or "نامشخص",
             status_label=presentation.label,
             status_badge_class=presentation.badge_class,
             progress_percent=progress,
@@ -121,6 +127,7 @@ class ManualVideoPresenter:
             "user": user,
             "jobs": jobs,
             "active_page": "manual_video",
+            "ai_tools": self._ai_tools,
         }
         if load_error:
             context["error"] = load_error
@@ -138,6 +145,7 @@ class ManualVideoPresenter:
         media_type: Optional[str],
         campaign_name: str,
         campaign_description: Optional[str],
+        ai_tool: str,
     ) -> RedirectResponse | object:
         clean_title = title.strip()
         clean_media_url = media_url.strip()
@@ -147,15 +155,41 @@ class ManualVideoPresenter:
         clean_campaign_description = (
             campaign_description.strip() if campaign_description else None
         )
+        clean_ai_tool = ai_tool.strip()
 
         jobs, load_error = self._load_recent_jobs(db)
-        if not clean_title or not clean_media_url or not clean_campaign_name:
+        if (
+            not clean_title
+            or not clean_media_url
+            or not clean_campaign_name
+            or not clean_ai_tool
+        ):
             context = {
                 "request": request,
                 "user": user,
                 "jobs": jobs,
                 "error": "عنوان، لینک ویدیو و نام کمپین الزامی هستند.",
                 "active_page": "manual_video",
+                "ai_tools": self._ai_tools,
+            }
+            if not clean_ai_tool:
+                context["error"] = (
+                    "عنوان، لینک ویدیو، نام کمپین و نام ابزار هوش مصنوعی الزامی هستند."
+                )
+            if load_error:
+                context.setdefault("load_error", load_error)
+            return self.templates.TemplateResponse(
+                "manual_video.html", context, status_code=400
+            )
+
+        if clean_ai_tool not in self._ai_tools:
+            context = {
+                "request": request,
+                "user": user,
+                "jobs": jobs,
+                "error": "ابزار هوش مصنوعی انتخاب‌شده معتبر نیست.",
+                "active_page": "manual_video",
+                "ai_tools": self._ai_tools,
             }
             if load_error:
                 context.setdefault("load_error", load_error)
@@ -168,6 +202,7 @@ class ManualVideoPresenter:
                 job_payload={
                     "title": clean_title,
                     "description": clean_description,
+                    "ai_tool": clean_ai_tool,
                 },
                 media_payloads=[
                     {
@@ -192,6 +227,7 @@ class ManualVideoPresenter:
                 "jobs": jobs,
                 "error": "ثبت ویدیو با خطا مواجه شد: " + str(exc),
                 "active_page": "manual_video",
+                "ai_tools": self._ai_tools,
             }
             if load_error:
                 context.setdefault("load_error", load_error)
@@ -201,6 +237,11 @@ class ManualVideoPresenter:
 
         self.logger.info(
             "Manual video job created",
-            extra={"user_id": user.id, "title": clean_title, "campaign": clean_campaign_name},
+            extra={
+                "user_id": user.id,
+                "title": clean_title,
+                "campaign": clean_campaign_name,
+                "ai_tool": clean_ai_tool,
+            },
         )
         return RedirectResponse(url="/manual-video", status_code=302)

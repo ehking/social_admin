@@ -43,6 +43,7 @@ def create_router(presenter: ManualVideoPresenter) -> APIRouter:
         media_type: Optional[str] = Form(None),
         campaign_name: str = Form(...),
         campaign_description: Optional[str] = Form(None),
+        ai_tool: str = Form(...),
         db: Session = Depends(get_db),
     ):
         user = auth.get_logged_in_user(
@@ -72,6 +73,7 @@ def create_router(presenter: ManualVideoPresenter) -> APIRouter:
             media_type=media_type,
             campaign_name=campaign_name,
             campaign_description=campaign_description,
+            ai_tool=ai_tool,
         )
 
     return router

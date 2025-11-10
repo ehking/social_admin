@@ -121,6 +121,7 @@ class Job(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(150), nullable=False)
     description = Column(Text, nullable=True)
+    ai_tool = Column(String(150), nullable=False, default="")
     status = Column(String(50), default="pending")
     progress_percent = Column(Integer, default=0, nullable=False)
     scheduled_time = Column(DateTime, nullable=True)

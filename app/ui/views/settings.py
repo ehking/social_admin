@@ -24,8 +24,12 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
 
     @router.get("/settings")
     async def settings(request: Request, db: Session = Depends(get_db)):
-        logger.info("Settings page requested")
-        user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_roles=ADMIN_ROLES,
+            required_menu=models.AdminMenu.SETTINGS,
+        )
         if not user:
             logger.info("Settings access denied for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
@@ -40,8 +44,12 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         value: str = Form(...),
         db: Session = Depends(get_db),
     ):
-        logger.info("Token save requested", extra={"token_name": name})
-        user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_roles=ADMIN_ROLES,
+            required_menu=models.AdminMenu.SETTINGS,
+        )
         if not user:
             logger.info("Token save denied for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
@@ -57,8 +65,12 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         token_id: int = Form(...),
         db: Session = Depends(get_db),
     ):
-        logger.info("Token delete requested", extra={"token_id": token_id})
-        user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_roles=ADMIN_ROLES,
+            required_menu=models.AdminMenu.SETTINGS,
+        )
         if not user:
             logger.info("Token delete denied for unauthenticated user", extra={"token_id": token_id})
             return RedirectResponse(url="/login", status_code=302)
@@ -67,5 +79,18 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
             extra={"user_id": user.id, "token_id": token_id},
         )
         return presenter.delete_token(db=db, user=user, token_id=token_id)
+
+    @router.post("/settings/permissions")
+    async def update_permissions(request: Request, db: Session = Depends(get_db)):
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_roles=[models.AdminRole.SUPERADMIN],
+            required_menu=models.AdminMenu.SETTINGS,
+        )
+        if not user:
+            return RedirectResponse(url="/login", status_code=302)
+        form_data = await request.form()
+        return presenter.update_permissions(db=db, user=user, form_data=form_data)
 
     return router

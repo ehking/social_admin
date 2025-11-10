@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Mapping
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -11,6 +12,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.backend import models
+from app.backend.services import permissions as permissions_service
+
+from .helpers import build_layout_context
 
 
 @dataclass(slots=True)
@@ -22,12 +26,16 @@ class SettingsPresenter:
 
     def render(self, request: Request, user: models.AdminUser, db: Session) -> object:
         tokens = db.query(models.ServiceToken).all()
-        context = {
-            "request": request,
-            "user": user,
-            "tokens": tokens,
-            "active_page": "settings",
-        }
+        context = build_layout_context(
+            request=request,
+            user=user,
+            db=db,
+            active_page="settings",
+            tokens=tokens,
+            permission_matrix=permissions_service.get_permission_matrix(db),
+            menu_definitions=permissions_service.list_menu_definitions(),
+            role_definitions=permissions_service.list_role_definitions(),
+        )
         return self.templates.TemplateResponse("settings.html", context)
 
     def save_token(
@@ -72,4 +80,19 @@ class SettingsPresenter:
                 "Service token deleted",
                 extra={"user_id": user.id, "token_id": token_id},
             )
+        return RedirectResponse(url="/settings", status_code=302)
+
+    def update_permissions(
+        self,
+        *,
+        db: Session,
+        user: models.AdminUser,
+        form_data: Mapping[str, object],
+    ) -> RedirectResponse:
+        updates = permissions_service.parse_permission_updates(form_data)
+        permissions_service.apply_permission_updates(db, updates)
+        self.logger.info(
+            "Menu permissions updated",
+            extra={"user_id": user.id},
+        )
         return RedirectResponse(url="/settings", status_code=302)

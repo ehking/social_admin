@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.backend import auth
+from app.backend import auth, models
 from app.backend.database import get_db
 
 from ..app_presenters.scheduler_presenter import SchedulerPresenter
@@ -23,8 +23,11 @@ def create_router(presenter: SchedulerPresenter) -> APIRouter:
 
     @router.get("/scheduler")
     async def scheduler(request: Request, db: Session = Depends(get_db)):
-        logger.info("Scheduler page requested")
-        user = auth.get_logged_in_user(request, db)
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_menu=models.AdminMenu.SCHEDULER,
+        )
         if not user:
             logger.info("Scheduler access redirected for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
@@ -41,11 +44,11 @@ def create_router(presenter: SchedulerPresenter) -> APIRouter:
         scheduled_time: str = Form(...),
         db: Session = Depends(get_db),
     ):
-        logger.info(
-            "Schedule creation requested",
-            extra={"account_id": account_id, "title": title},
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_menu=models.AdminMenu.SCHEDULER,
         )
-        user = auth.get_logged_in_user(request, db)
         if not user:
             logger.info("Schedule creation redirected for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
@@ -75,8 +78,11 @@ def create_router(presenter: SchedulerPresenter) -> APIRouter:
         post_id: int = Form(...),
         db: Session = Depends(get_db),
     ):
-        logger.info("Schedule delete requested", extra={"post_id": post_id})
-        user = auth.get_logged_in_user(request, db)
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_menu=models.AdminMenu.SCHEDULER,
+        )
         if not user:
             logger.info("Schedule delete redirected for unauthenticated user", extra={"post_id": post_id})
             return RedirectResponse(url="/login", status_code=302)

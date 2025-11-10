@@ -11,6 +11,9 @@ from typing import Any, Dict, List
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
+
+from .helpers import build_layout_context
 
 
 @dataclass(slots=True)
@@ -31,14 +34,15 @@ class LogsPresenter:
     max_files: int = 10
     max_entries_per_file: int = 50
 
-    def render(self, request: Request, user: Any) -> Any:
+    def render(self, request: Request, user: Any, db: Session) -> Any:
         log_files = self._collect_log_files()
-        context: Dict[str, Any] = {
-            "request": request,
-            "user": user,
-            "log_files": log_files,
-            "active_page": "logs",
-        }
+        context: Dict[str, Any] = build_layout_context(
+            request=request,
+            user=user,
+            db=db,
+            active_page="logs",
+            log_files=log_files,
+        )
         return self.templates.TemplateResponse("logs.html", context)
 
     def _collect_log_files(self) -> List[LogFileSummary]:

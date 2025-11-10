@@ -24,12 +24,15 @@ def create_router(presenter: LogsPresenter) -> APIRouter:
 
     @router.get("/logs")
     async def view_logs(request: Request, db: Session = Depends(get_db)):
-        logger.info("Logs page requested")
-        user = auth.get_logged_in_user(request, db, required_roles=ADMIN_ROLES)
+        user = auth.get_logged_in_user(
+            request,
+            db,
+            required_roles=ADMIN_ROLES,
+            required_menu=models.AdminMenu.LOGS,
+        )
         if not user:
             logger.info("Logs access redirected for unauthenticated user")
             return RedirectResponse(url="/login", status_code=302)
-        logger.info("Rendering logs page", extra={"user_id": user.id})
-        return presenter.render(request, user)
+        return presenter.render(request, user, db)
 
     return router

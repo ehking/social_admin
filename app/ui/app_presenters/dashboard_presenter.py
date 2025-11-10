@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.backend import models
 
+from .helpers import build_layout_context
+
 
 @dataclass(slots=True)
 class DashboardPresenter:
@@ -36,12 +38,13 @@ class DashboardPresenter:
             .all()
         )
 
-        context: Dict[str, Any] = {
-            "request": request,
-            "user": user,
-            "accounts": accounts,
-            "scheduled_posts": scheduled_posts,
-            "tokens": tokens,
-            "active_page": "dashboard",
-        }
+        context: Dict[str, Any] = build_layout_context(
+            request=request,
+            user=user,
+            db=db,
+            active_page="dashboard",
+            accounts=accounts,
+            scheduled_posts=scheduled_posts,
+            tokens=tokens,
+        )
         return self.templates.TemplateResponse("dashboard.html", context)

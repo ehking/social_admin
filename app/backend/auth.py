@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)

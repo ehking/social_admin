@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.backend import models
+from app.backend.services import permissions as permissions_service
 from app.backend.services.data_access import DatabaseServiceError, ServiceTokenService
 
 

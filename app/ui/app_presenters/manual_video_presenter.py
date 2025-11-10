@@ -23,6 +23,12 @@ from app.backend.http_logging import (
     log_request_success,
 )
 from app.backend.services import create_job_with_media_and_campaign
+from app.backend.services.ai_client import (
+    AIServiceConfigurationError,
+    AIServiceDispatchError,
+    DispatchResult,
+    dispatch_manual_video_job,
+)
 from app.backend.services.data_access import DatabaseServiceError, JobQueryService
 from app.backend.ai_workflow import TOOLS
 
@@ -403,6 +409,59 @@ class ManualVideoPresenter:
 
         return target_path
 
+    def _dispatch_manual_job_to_ai(
+        self,
+        *,
+        job_id: int,
+        user: models.AdminUser,
+        title: str,
+        description: Optional[str],
+        media_url: str,
+        media_type: str,
+        campaign_name: str,
+        campaign_description: Optional[str],
+        ai_tool: str,
+    ) -> Optional[DispatchResult]:
+        payload: dict[str, object] = {
+            "job_id": job_id,
+            "title": title,
+            "media_url": media_url,
+            "media_type": media_type,
+            "campaign_name": campaign_name,
+            "ai_tool": ai_tool,
+            "submitted_by": user.id,
+        }
+        if description:
+            payload["description"] = description
+        if campaign_description:
+            payload["campaign_description"] = campaign_description
+
+        try:
+            result = dispatch_manual_video_job(job_id, payload)
+        except AIServiceConfigurationError:
+            self.logger.info(
+                "AI service endpoint is not configured; skipping dispatch",
+                extra={"job_id": job_id, "ai_tool": ai_tool},
+            )
+            return None
+        except AIServiceDispatchError as exc:
+            self.logger.error(
+                "Failed to dispatch job to AI service",
+                extra={"job_id": job_id, "ai_tool": ai_tool, "error": str(exc)},
+            )
+            return None
+
+        self.logger.info(
+            "AI service accepted manual video job",
+            extra={
+                "user_id": user.id,
+                "job_id": job_id,
+                "ai_tool": ai_tool,
+                "ai_job_token": result.job_token,
+            },
+        )
+        return result
+
     def create_manual_video(
         self,
         *,
@@ -514,19 +573,32 @@ class ManualVideoPresenter:
                 "manual_video.html", context, status_code=400
             )
 
-        if job and job.id and self._should_download_media(clean_media_url):
-            local_path = self._download_manual_video_preview(
-                clean_media_url, job_id=job.id
-            )
-            if local_path:
-                self.logger.info(
-                    "Manual video preview saved locally",
-                    extra={
-                        "user_id": user.id,
-                        "job_id": job.id,
-                        "local_path": str(local_path),
-                    },
+        if job and job.id:
+            if self._should_download_media(clean_media_url):
+                local_path = self._download_manual_video_preview(
+                    clean_media_url, job_id=job.id
                 )
+                if local_path:
+                    self.logger.info(
+                        "Manual video preview saved locally",
+                        extra={
+                            "user_id": user.id,
+                            "job_id": job.id,
+                            "local_path": str(local_path),
+                        },
+                    )
+
+            self._dispatch_manual_job_to_ai(
+                job_id=job.id,
+                user=user,
+                title=clean_title,
+                description=clean_description,
+                media_url=clean_media_url,
+                media_type=clean_media_type,
+                campaign_name=clean_campaign_name,
+                campaign_description=clean_campaign_description,
+                ai_tool=clean_ai_tool,
+            )
 
         self.logger.info(
             "Manual video job created",

@@ -241,15 +241,6 @@ class JobProcessor:
                 timeout=self.request_timeout,
                 allow_redirects=True,
             )
-            response.raise_for_status()
-            log_request_success(
-                "HEAD",
-                url,
-                status=response.status_code,
-                started_at=started_at,
-                job_id=media.job_id,
-                media_id=media.id,
-            )
         except requests.RequestException as exc:  # pragma: no cover - network errors vary
             log_request_failure(
                 "HEAD",
@@ -267,9 +258,46 @@ class JobProcessor:
 
         status_code = response.status_code
         if status_code in {405, 501}:
+            log_request_success(
+                "HEAD",
+                url,
+                status=status_code,
+                started_at=started_at,
+                job_id=media.job_id,
+                media_id=media.id,
+                fallback="GET",
+            )
             response.close()
             return self._verify_remote_with_get(url, media)
 
+        try:
+            response.raise_for_status()
+        except requests.RequestException as exc:  # pragma: no cover - network errors vary
+            log_request_failure(
+                "HEAD",
+                url,
+                started_at=started_at,
+                error=exc,
+                job_id=media.job_id,
+                media_id=media.id,
+            )
+            response.close()
+            raise JobProcessingError(
+                "Unable to reach remote media URL",
+                code="network_error",
+                context={"media_id": media.id, "media_url": url, "error": str(exc)},
+            ) from exc
+
+        log_request_success(
+            "HEAD",
+            url,
+            status=status_code,
+            started_at=started_at,
+            job_id=media.job_id,
+            media_id=media.id,
+        )
+
+        status_code = response.status_code
         response.close()
 
         if status_code >= 400:

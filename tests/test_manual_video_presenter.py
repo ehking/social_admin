@@ -7,6 +7,8 @@ import sys
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
+from fastapi.responses import RedirectResponse
+
 from app.ui.app_presenters import manual_video_presenter
 from app.ui.app_presenters.manual_video_presenter import ManualVideoPresenter
 
@@ -118,3 +120,63 @@ def test_should_download_media_filters_non_http():
     assert presenter._should_download_media("https://example.com/video.mp4")
     assert not presenter._should_download_media("ftp://example.com/video.mp4")
     assert not presenter._should_download_media("/local/path/video.mp4")
+
+
+def test_create_manual_video_dispatches_to_ai(monkeypatch, tmp_path):
+    presenter = _create_presenter(tmp_path)
+    monkeypatch.setattr(
+        manual_video_presenter.ManualVideoPresenter,
+        "_load_recent_jobs",
+        lambda self, _db: ([], None),
+    )
+
+    job = SimpleNamespace(id=55, media=[], campaign=None)
+    monkeypatch.setattr(
+        manual_video_presenter,
+        "create_job_with_media_and_campaign",
+        lambda **_kwargs: job,
+    )
+
+    dispatch_calls = []
+
+    def fake_dispatch(job_id, payload):
+        dispatch_calls.append((job_id, payload))
+        return manual_video_presenter.DispatchResult(
+            job_token="ext-55", response_payload={"job_id": "ext-55"}
+        )
+
+    monkeypatch.setattr(manual_video_presenter, "dispatch_manual_video_job", fake_dispatch)
+    monkeypatch.setattr(
+        manual_video_presenter.ManualVideoPresenter,
+        "_should_download_media",
+        lambda self, _url: False,
+    )
+
+    request = SimpleNamespace()
+    db = object()
+    user = SimpleNamespace(id=7)
+    ai_tool = presenter._ai_tools[0]
+
+    response = presenter.create_manual_video(
+        request=request,
+        db=db,
+        user=user,
+        title="نمونه ویدیو",
+        description="توضیحات",
+        media_url="https://cdn.example/video.mp4",
+        media_type="video/mp4",
+        campaign_name="کمپین نمونه",
+        campaign_description="توضیحات کمپین",
+        ai_tool=ai_tool,
+    )
+
+    assert dispatch_calls
+    job_id, payload = dispatch_calls[0]
+    assert job_id == job.id
+    assert payload["job_id"] == job.id
+    assert payload["title"] == "نمونه ویدیو"
+    assert payload["media_url"] == "https://cdn.example/video.mp4"
+    assert payload["campaign_name"] == "کمپین نمونه"
+    assert payload["ai_tool"] == ai_tool
+    assert payload["submitted_by"] == user.id
+    assert isinstance(response, RedirectResponse)

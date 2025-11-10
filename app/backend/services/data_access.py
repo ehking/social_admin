@@ -162,15 +162,28 @@ class ServiceTokenService(SessionBackedService):
             .all()
         )
 
-    def upsert_token(self, *, name: str, key: str, value: str) -> Tuple[models.ServiceToken, bool]:
+    def upsert_token(
+        self,
+        *,
+        name: str,
+        key: str,
+        value: str,
+        endpoint_url: str | None,
+    ) -> Tuple[models.ServiceToken, bool]:
         def operation(session: Session) -> Tuple[models.ServiceToken, bool]:
             token = session.query(models.ServiceToken).filter_by(key=key).first()
             created = False
             if token:
                 token.name = name
                 token.value = value
+                token.endpoint_url = endpoint_url
             else:
-                token = models.ServiceToken(name=name, key=key, value=value)
+                token = models.ServiceToken(
+                    name=name,
+                    key=key,
+                    value=value,
+                    endpoint_url=endpoint_url,
+                )
                 session.add(token)
                 created = True
             session.flush()

@@ -68,6 +68,15 @@ class JsonLogFormatter(logging.Formatter):
         return value
 
 
+def _sanitize_identifier(value: str) -> str:
+    """Return a filesystem-friendly representation of ``value``."""
+
+    sanitized = "".join(
+        char if char.isalnum() or char in {"-", "_"} else "-" for char in value
+    ).strip("-_")
+    return sanitized or "job"
+
+
 @dataclass(slots=True)
 class JobContext:
     """Holds contextual metadata and logger for a background job."""
@@ -79,6 +88,7 @@ class JobContext:
     log_path: Path
     _handler: logging.Handler
     _base_logger: logging.Logger
+    log_identifier: str | None = None
 
     def close(self) -> None:
         """Detach handlers associated with this job context."""
@@ -109,13 +119,20 @@ def job_context(
     campaign_id: str | int | None = None,
     log_dir: str | Path | None = None,
     extra_context: Mapping[str, Any] | None = None,
+    log_identifier: str | None = None,
 ) -> Iterator[JobContext]:
     """Create a structured logging context for background job execution."""
 
     job_id = uuid4().hex
     base_log_dir = Path(log_dir) if log_dir is not None else Path("logs") / "jobs"
     base_log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = base_log_dir / f"{job_id}.log"
+
+    if log_identifier:
+        filename = f"{_sanitize_identifier(str(log_identifier))}-{job_id}.log"
+    else:
+        filename = f"{job_id}.log"
+
+    log_path = base_log_dir / filename
 
     base_logger = logging.getLogger(f"social_admin.job.{job_id}")
     base_logger.setLevel(logging.INFO)
@@ -143,6 +160,9 @@ def job_context(
         log_path=log_path,
         _handler=handler,
         _base_logger=base_logger,
+        log_identifier=_sanitize_identifier(str(log_identifier))
+        if log_identifier
+        else None,
     )
 
     adapter.info("job_started")

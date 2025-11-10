@@ -83,6 +83,7 @@ class ServiceToken(Base):
     name = Column(String(100), nullable=False)
     key = Column(String(100), nullable=False)
     value = Column(EncryptedText(), nullable=False)
+    endpoint_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 class SocialAccount(Base):
     __tablename__ = "social_accounts"

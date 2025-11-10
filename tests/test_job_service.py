@@ -123,6 +123,37 @@ def test_media_storage_key_handles_trailing_slash_urls():
         assert persisted_job.ai_tool == "Midjourney"
 
 
+def test_create_job_uses_provided_session_without_factory():
+    job_payload = {"title": "Reused Session", "description": ""}
+    media_payloads = [
+        {
+            "media_type": "video/mp4",
+            "media_url": "https://cdn.example.com/reused.mp4",
+        }
+    ]
+    campaign_payload = {"name": "Session Sharing"}
+
+    def failing_factory():
+        raise AssertionError("session factory should not be called when session is provided")
+
+    service = JobService(session_factory=failing_factory)
+
+    with SessionLocal() as session:
+        job = service.create_job_with_media_and_campaign(
+            job_payload,
+            media_payloads,
+            campaign_payload,
+            session=session,
+        )
+
+        assert session.get(Job, job.id) is not None
+
+    with SessionLocal() as verification_session:
+        persisted = verification_session.get(Job, job.id)
+        assert persisted is not None
+        assert persisted.media, "Job media should persist when using provided session"
+
+
 def test_campaign_payload_requires_non_empty_name():
     job_payload = {
         "title": "Promo",

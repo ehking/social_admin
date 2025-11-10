@@ -52,6 +52,42 @@
 <section class="panel">
     <header class="panel-header">
         <div>
+            <h2>نمونه ویدیوهای ساخته شده با هوش مصنوعی</h2>
+            <p class="panel-description">
+                برای الهام گرفتن می‌توانید نمونه‌های آماده را مشاهده کنید یا لینک آن‌ها را در فرم بالا استفاده نمایید.
+            </p>
+        </div>
+    </header>
+    <div class="sample-video-grid" role="list">
+        {% for video in sample_ai_videos %}
+            <article class="sample-video-card" role="listitem">
+                <div class="sample-video-thumbnail" style="background-image: url('{{ video.thumbnail_url }}');">
+                    <span class="sample-video-duration" aria-label="مدت زمان ویدیو">{{ video.duration }}</span>
+                </div>
+                <div class="sample-video-body">
+                    <h3 class="sample-video-title">{{ video.title }}</h3>
+                    <p class="sample-video-description">{{ video.description }}</p>
+                    <div class="sample-video-actions">
+                        <a class="btn btn-secondary btn-small" href="{{ video.video_url }}" target="_blank" rel="noopener">
+                            مشاهده ویدیو
+                        </a>
+                        <button
+                            class="btn btn-small btn-copy"
+                            type="button"
+                            data-video-url="{{ video.video_url }}"
+                            aria-label="کپی لینک ویدیو"
+                        >
+                            کپی لینک
+                        </button>
+                    </div>
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+<section class="panel">
+    <header class="panel-header">
+        <div>
             <h2>آخرین درخواست‌ها</h2>
             <p class="panel-description">نظارت بر وضعیت پردازش ویدیوهای ثبت‌شده</p>
         </div>
@@ -103,4 +139,42 @@
         <p class="empty">درخواستی برای نمایش وجود ندارد.</p>
     {% endif %}
 </section>
+{% endblock %}
+{% block extra_scripts %}
+    <script>
+        (() => {
+            const copyButtons = document.querySelectorAll('.btn-copy');
+            const resetDelay = 2000;
+
+            const resetButton = (button) => {
+                button.classList.remove('is-copied');
+                button.textContent = 'کپی لینک';
+            };
+
+            copyButtons.forEach((button) => {
+                button.addEventListener('click', async () => {
+                    const videoUrl = button.dataset.videoUrl;
+                    if (!videoUrl) {
+                        return;
+                    }
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(videoUrl);
+                            button.classList.add('is-copied');
+                            button.textContent = 'کپی شد!';
+                        } else {
+                            window.prompt('برای کپی لینک را انتخاب و تایید کنید:', videoUrl);
+                            button.classList.add('is-copied');
+                            button.textContent = 'لینک آماده است';
+                        }
+                        setTimeout(() => resetButton(button), resetDelay);
+                    } catch (err) {
+                        console.error('Failed to copy video url', err);
+                        button.textContent = 'کپی در دسترس نیست';
+                        setTimeout(() => resetButton(button), resetDelay);
+                    }
+                });
+            });
+        })();
+    </script>
 {% endblock %}

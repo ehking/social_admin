@@ -19,6 +19,10 @@
             <label for="key">کلید <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="text" id="key" name="key" required>
         </div>
+        <div class="form-field">
+            <label for="endpoint_url">آدرس سرویس</label>
+            <input type="url" id="endpoint_url" name="endpoint_url" placeholder="https://service.example.com/api">
+        </div>
         <div class="form-field full">
             <label for="value">مقدار <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <textarea id="value" name="value" rows="3" required></textarea>
@@ -88,6 +92,7 @@
                     <tr>
                         <th>نام</th>
                         <th>کلید</th>
+                        <th>آدرس سرویس</th>
                         <th>تاریخ ایجاد</th>
                         <th></th>
                     </tr>
@@ -97,6 +102,7 @@
                         <tr>
                             <td>{{ token.name }}</td>
                             <td>{{ token.key }}</td>
+                            <td class="text-break">{{ token.endpoint_url or '—' }}</td>
                             <td>{{ token.created_at.strftime('%Y-%m-%d %H:%M') if token.created_at else '' }}</td>
                             <td class="actions">
                                 <form method="post" action="/settings/delete" onsubmit="return confirm('توکن حذف شود؟');">

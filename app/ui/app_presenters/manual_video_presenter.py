@@ -53,6 +53,19 @@ class ManualVideoJobView:
 
 
 @dataclass(frozen=True, slots=True)
+class ManualVideoFormDefaults:
+    """Default values for the manual video creation form."""
+
+    title: str
+    description: str
+    media_url: str
+    media_type: str
+    campaign_name: str
+    campaign_description: str
+    ai_tool: str
+
+
+@dataclass(frozen=True, slots=True)
 class SampleAIVideo:
     """Static representation of an AI-generated video preview."""
 
@@ -118,6 +131,12 @@ SAMPLE_AI_VIDEOS: tuple[SampleAIVideo, ...] = (
 )
 
 
+DEFAULT_FORM_CAMPAIGN_NAME = "کمپین معرفی محصول آینده"
+DEFAULT_FORM_CAMPAIGN_DESCRIPTION = (
+    "یک کمپین نمونه برای معرفی محصولات جدید با استفاده از ابزارهای هوش مصنوعی."
+)
+
+
 @dataclass(slots=True)
 class ManualVideoPresenter:
     """Prepare data for manual video creation and handle form submissions."""
@@ -129,6 +148,25 @@ class ManualVideoPresenter:
     _ai_tools: tuple[str, ...] = field(
         default_factory=lambda: tuple(tool.name for tool in TOOLS)
     )
+
+    def _build_form_defaults(self) -> ManualVideoFormDefaults:
+        """Return default values that pre-populate the manual video form."""
+
+        default_tool = self._ai_tools[0] if self._ai_tools else ""
+        sample_video = SAMPLE_AI_VIDEOS[0] if SAMPLE_AI_VIDEOS else None
+
+        return ManualVideoFormDefaults(
+            title=sample_video.title if sample_video else "ویدیوی جدید هوش مصنوعی",
+            description=
+                sample_video.description
+                if sample_video
+                else "توضیحات پیشنهادی برای ویدیوی تولید شده با هوش مصنوعی.",
+            media_url=sample_video.video_url if sample_video else "",
+            media_type="video/mp4",
+            campaign_name=DEFAULT_FORM_CAMPAIGN_NAME,
+            campaign_description=DEFAULT_FORM_CAMPAIGN_DESCRIPTION,
+            ai_tool=default_tool,
+        )
 
     def _resolve_stage(self, status: str, progress: int) -> tuple[str, str]:
         normalized_status = (status or "").strip().lower()
@@ -273,6 +311,7 @@ class ManualVideoPresenter:
             "active_page": "manual_video",
             "ai_tools": self._ai_tools,
             "sample_ai_videos": SAMPLE_AI_VIDEOS,
+            "manual_video_defaults": self._build_form_defaults(),
         }
         if load_error:
             context["error"] = load_error
@@ -360,6 +399,7 @@ class ManualVideoPresenter:
                 "active_page": "manual_video",
                 "ai_tools": self._ai_tools,
                 "sample_ai_videos": SAMPLE_AI_VIDEOS,
+                "manual_video_defaults": self._build_form_defaults(),
             }
             if not clean_ai_tool:
                 context["error"] = (
@@ -380,6 +420,7 @@ class ManualVideoPresenter:
                 "active_page": "manual_video",
                 "ai_tools": self._ai_tools,
                 "sample_ai_videos": SAMPLE_AI_VIDEOS,
+                "manual_video_defaults": self._build_form_defaults(),
             }
             if load_error:
                 context.setdefault("load_error", load_error)
@@ -422,6 +463,7 @@ class ManualVideoPresenter:
                 "active_page": "manual_video",
                 "ai_tools": self._ai_tools,
                 "sample_ai_videos": SAMPLE_AI_VIDEOS,
+                "manual_video_defaults": self._build_form_defaults(),
             }
             if load_error:
                 context.setdefault("load_error", load_error)

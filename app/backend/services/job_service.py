@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Callable, Iterable, Mapping
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
@@ -21,11 +22,55 @@ class JobService:
         self._session_factory: Callable[[], Session] = session_factory or SessionLocal
 
     @staticmethod
-    def _validate_media_payload(media_payload: Mapping[str, object]) -> None:
-        if not media_payload.get("media_url"):
+    def _normalize_string(value: object | None) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            normalized = value.strip()
+        else:
+            normalized = str(value).strip()
+        return normalized or None
+
+    @classmethod
+    def _validate_media_payload(cls, media_payload: Mapping[str, object]) -> None:
+        media_url = cls._normalize_string(media_payload.get("media_url"))
+        media_type = cls._normalize_string(media_payload.get("media_type"))
+
+        if not media_url:
             raise ValueError("Job media requires a 'media_url'.")
-        if not media_payload.get("media_type"):
+        if not media_type:
             raise ValueError("Job media requires a 'media_type'.")
+
+    @staticmethod
+    def _derive_storage_key(
+        media_payload: Mapping[str, object],
+        *,
+        job_id: int,
+        media_index: int,
+    ) -> str:
+        def from_url(candidate: object | None) -> str | None:
+            normalized = JobService._normalize_string(candidate)
+            if not normalized:
+                return None
+
+            parsed = urlparse(normalized)
+            if parsed.scheme and parsed.netloc:
+                combined = f"{parsed.netloc}{parsed.path}".strip("/")
+                if combined:
+                    return combined
+            elif parsed.path:
+                stripped_path = parsed.path.strip("/")
+                if stripped_path:
+                    return stripped_path
+
+            return normalized
+
+        for key in ("storage_key", "media_url", "storage_url"):
+            derived = from_url(media_payload.get(key))
+            if derived:
+                return derived
+
+        return f"job-{job_id}-media-{media_index}"
 
     @staticmethod
     def _validate_campaign_payload(campaign_payload: Mapping[str, object]) -> None:
@@ -57,18 +102,25 @@ class JobService:
                 session.flush()
                 logger.debug("Job persisted", extra={"job_id": job.id})
 
-                for payload in media_payloads:
+                for index, payload in enumerate(media_payloads, start=1):
                     self._validate_media_payload(payload)
                     media_data = dict(payload)
+                    media_type = self._normalize_string(media_data.get("media_type"))
+                    media_url = self._normalize_string(media_data.get("media_url"))
+                    storage_url = self._normalize_string(media_data.get("storage_url"))
+
+                    if media_type:
+                        media_data["media_type"] = media_type
+                    if media_url:
+                        media_data["media_url"] = media_url
+                    if storage_url is not None:
+                        media_data["storage_url"] = storage_url
                     if not media_data.get("job_name"):
                         media_data["job_name"] = job.title
-                    if not media_data.get("storage_key"):
-                        fallback_storage_key = (
-                            media_data.get("media_url")
-                            or media_data.get("storage_url")
-                        )
-                        if fallback_storage_key:
-                            media_data["storage_key"] = fallback_storage_key
+                    storage_key = self._derive_storage_key(
+                        media_data, job_id=job.id, media_index=index
+                    )
+                    media_data["storage_key"] = storage_key
                     media = JobMedia(job=job, **media_data)
                     session.add(media)
                     logger.debug(

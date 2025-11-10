@@ -56,7 +56,7 @@ def test_media_defaults_to_job_title_when_name_missing():
         assert persisted_job.media[0].job_name == "Social Clip"
 
 
-def test_media_storage_key_defaults_to_url_when_missing():
+def test_media_storage_key_defaults_to_derived_value_when_missing():
     job_payload = {"title": "Teaser", "description": "Short teaser"}
     media_url = "https://videos.example.com/teaser.mp4"
     media_payloads = [
@@ -74,4 +74,28 @@ def test_media_storage_key_defaults_to_url_when_missing():
 
         assert persisted_job is not None
         assert persisted_job.media, "Job should have related media"
-        assert persisted_job.media[0].storage_key == media_url
+        assert (
+            persisted_job.media[0].storage_key
+            == "videos.example.com/teaser.mp4"
+        )
+
+
+def test_media_storage_key_handles_trailing_slash_urls():
+    job_payload = {"title": "Docs", "description": None}
+    media_url = "https://github.com/"
+    media_payloads = [
+        {"media_type": "video/mp4", "media_url": media_url, "storage_url": media_url}
+    ]
+    campaign_payload = {"name": "Docs Campaign"}
+
+    service = JobService()
+    job = service.create_job_with_media_and_campaign(
+        job_payload, media_payloads, campaign_payload
+    )
+
+    with SessionLocal() as session:
+        persisted_job = session.get(Job, job.id)
+
+        assert persisted_job is not None
+        assert persisted_job.media, "Job should have related media"
+        assert persisted_job.media[0].storage_key == "github.com"

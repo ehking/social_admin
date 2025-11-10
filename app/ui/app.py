@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from threading import Thread
 from time import perf_counter
 
 from fastapi import FastAPI, Request, Response
@@ -41,6 +42,7 @@ from app.backend import auth
 from app.backend.database import Base, SessionLocal, engine, run_startup_migrations
 from app.backend.logging_config import configure_logging
 from app.backend.monitoring import configure_monitoring
+from app.backend.services import JobProcessor
 from app.backend.services.permissions import ensure_default_permissions
 
 from .app_presenters.accounts_presenter import AccountsPresenter
@@ -84,6 +86,16 @@ def _initialize_admin_security() -> None:
         logger.info("Startup complete and default access controls ensured.")
     finally:
         db.close()
+
+
+def _schedule_job_reprocessing() -> None:
+    processor = JobProcessor()
+
+    def _runner() -> None:
+        processor.process_pending_jobs()
+
+    thread = Thread(target=_runner, name="job-reprocessor", daemon=True)
+    thread.start()
 
 
 def create_app() -> FastAPI:
@@ -171,5 +183,6 @@ def create_app() -> FastAPI:
         Base.metadata.create_all(bind=engine)
         run_startup_migrations()
         _initialize_admin_security()
+        _schedule_job_reprocessing()
 
     return app

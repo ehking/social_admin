@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
+from ..http_logging import log_request_failure, log_request_start, log_request_success
 from ..logging_utils import job_context
 from ..models import Job, JobMedia
 
@@ -227,13 +228,37 @@ class JobProcessor:
         }
 
     def _check_remote_media(self, url: str, media: JobMedia) -> Dict[str, object]:
+        started_at = log_request_start(
+            "HEAD",
+            url,
+            job_id=media.job_id,
+            media_id=media.id,
+            timeout=self.request_timeout,
+        )
         try:
             response: Response = requests.head(
                 url,
                 timeout=self.request_timeout,
                 allow_redirects=True,
             )
+            response.raise_for_status()
+            log_request_success(
+                "HEAD",
+                url,
+                status=response.status_code,
+                started_at=started_at,
+                job_id=media.job_id,
+                media_id=media.id,
+            )
         except requests.RequestException as exc:  # pragma: no cover - network errors vary
+            log_request_failure(
+                "HEAD",
+                url,
+                started_at=started_at,
+                error=exc,
+                job_id=media.job_id,
+                media_id=media.id,
+            )
             raise JobProcessingError(
                 "Unable to reach remote media URL",
                 code="network_error",

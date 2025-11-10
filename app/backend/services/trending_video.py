@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from ..config import AppSettings, get_settings
+from ..http_logging import log_request_failure, log_request_start, log_request_success
 from ..logging_utils import job_context
 
 from .storage import StorageResult, StorageService, StorageError, get_storage_service
@@ -74,8 +75,23 @@ def _download_preview_to_path(track: "TrendingTrack", destination: Path) -> Path
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     LOGGER.info("Downloading preview for \"%s\"", track.display_name)
-    with requests.get(track.preview_url, timeout=10, stream=True) as response:
+    started_at = log_request_start("GET", track.preview_url, resource="trending_preview")
+    try:
+        response = requests.get(track.preview_url, timeout=10, stream=True)
         response.raise_for_status()
+    except Exception as exc:
+        log_request_failure("GET", track.preview_url, started_at=started_at, error=exc)
+        raise
+
+    log_request_success(
+        "GET",
+        track.preview_url,
+        status=response.status_code,
+        started_at=started_at,
+        resource="trending_preview",
+    )
+
+    with response:
         with destination.open("wb") as handle:
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
@@ -243,11 +259,34 @@ def request_with_backoff(
     method_name = getattr(method, "__name__", str(method))
     while True:
         LOGGER.debug("Attempt %d/%d for %s %s", attempt, attempts_limit, method_name.upper(), url)
+        started_at = log_request_start(
+            method_name,
+            url,
+            attempt=attempt,
+            max_attempts=attempts_limit,
+        )
         try:
             response = method(url, **request_kwargs)
             response.raise_for_status()
+            log_request_success(
+                method_name,
+                url,
+                status=response.status_code,
+                started_at=started_at,
+                attempt=attempt,
+                max_attempts=attempts_limit,
+            )
             return response
         except requests.exceptions.RequestException as exc:
+            log_request_failure(
+                method_name,
+                url,
+                started_at=started_at,
+                error=exc,
+                attempt=attempt,
+                max_attempts=attempts_limit,
+                status=getattr(getattr(exc, "response", None), "status_code", None),
+            )
             retriable = _is_retriable_error(exc)
             if not retriable:
                 LOGGER.error("Non-retriable error calling %s %s: %s", method_name.upper(), url, exc)

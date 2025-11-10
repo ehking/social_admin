@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -16,6 +17,11 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.backend import models
+from app.backend.http_logging import (
+    log_request_failure,
+    log_request_start,
+    log_request_success,
+)
 from app.backend.services import create_job_with_media_and_campaign
 from app.backend.services.data_access import DatabaseServiceError, JobQueryService
 from app.backend.ai_workflow import TOOLS
@@ -24,6 +30,20 @@ try:  # pragma: no cover - optional dependency in minimal test environments
     import requests
 except Exception:  # pragma: no cover - fallback when requests unavailable
     requests = None  # type: ignore[assignment]
+
+
+@contextmanager
+def _response_context(response):
+    if hasattr(response, "__enter__") and hasattr(response, "__exit__"):
+        with response:
+            yield response
+    else:
+        try:
+            yield response
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,10 +311,32 @@ class ManualVideoPresenter:
             )
             return None
 
+        started_at = log_request_start(
+            "GET",
+            url,
+            job_id=job_id,
+            purpose="manual_video_preview",
+        )
         try:
             response = requests.get(url, timeout=15, stream=True)
             response.raise_for_status()
+            log_request_success(
+                "GET",
+                url,
+                status=getattr(response, "status_code", ""),
+                started_at=started_at,
+                job_id=job_id,
+                purpose="manual_video_preview",
+            )
         except Exception as exc:  # pragma: no cover - defensive for network errors
+            log_request_failure(
+                "GET",
+                url,
+                started_at=started_at,
+                error=exc,
+                job_id=job_id,
+                purpose="manual_video_preview",
+            )
             self.logger.warning(
                 "Failed to download manual video preview",
                 extra={"url": url, "error": str(exc)},
@@ -308,10 +350,11 @@ class ManualVideoPresenter:
         target_path = target_dir / f"job-{job_id}{suffix}"
 
         try:
-            with target_path.open("wb") as handle:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        handle.write(chunk)
+            with _response_context(response):
+                with target_path.open("wb") as handle:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            handle.write(chunk)
         except Exception as exc:  # pragma: no cover - defensive for IO errors
             self.logger.error(
                 "Failed to persist manual video preview",

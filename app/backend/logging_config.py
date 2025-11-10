@@ -11,7 +11,7 @@ DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
     "disable_existing_loggers": False,
     "formatters": {
         "standard": {
-            "format": "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+            "format": "%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s",
         }
     },
     "handlers": {
@@ -19,16 +19,28 @@ DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
             "class": "logging.StreamHandler",
             "formatter": "standard",
         },
-        "file": {
+        "service_file": {
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "standard",
-            "filename": "logs/app.log",
+            "filename": "logs/service.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 3,
+        },
+        "api_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "formatter": "standard",
+            "filename": "logs/api_requests.log",
             "maxBytes": 5 * 1024 * 1024,
             "backupCount": 3,
         },
     },
     "loggers": {
-        "": {"handlers": ["console", "file"], "level": "INFO"},
+        "": {"handlers": ["console", "service_file"], "level": "INFO"},
+        "app.api": {
+            "handlers": ["api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "uvicorn.error": {"level": "INFO"},
         "uvicorn.access": {"level": "INFO"},
     },
@@ -47,10 +59,11 @@ def configure_logging(config: Dict[str, Any] | None = None) -> None:
 
     resolved_config = config or DEFAULT_LOGGING_CONFIG
 
-    log_path = Path(
-        resolved_config["handlers"].get("file", {}).get("filename", "logs/app.log")
-    )
-    if log_path:
+    for handler in resolved_config.get("handlers", {}).values():
+        filename = handler.get("filename") if isinstance(handler, dict) else None
+        if not filename:
+            continue
+        log_path = Path(filename)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
     dictConfig(resolved_config)

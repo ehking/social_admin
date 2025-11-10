@@ -23,6 +23,15 @@
             <label for="media_type">نوع رسانه</label>
             <input type="text" id="media_type" name="media_type" value="video/mp4">
         </div>
+        <div class="form-field">
+            <label for="ai_tool">ابزار هوش مصنوعی مورد استفاده <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
+            <select id="ai_tool" name="ai_tool" required>
+                <option value="" disabled selected>انتخاب ابزار</option>
+                {% for tool in ai_tools %}
+                    <option value="{{ tool }}">{{ tool }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <div class="form-field full">
             <label for="description">توضیحات ویدیو</label>
             <textarea id="description" name="description" rows="3" placeholder="توضیحات اختیاری"></textarea>
@@ -90,6 +99,7 @@
                     <tr>
                         <th>عنوان</th>
                         <th>کمپین</th>
+                        <th>ابزار هوش مصنوعی</th>
                         <th>وضعیت</th>
                         <th>پیشرفت</th>
                         <th>تاریخ ایجاد</th>
@@ -100,6 +110,7 @@
                         <tr>
                             <td>{{ job.title }}</td>
                             <td>{{ job.campaign_name or '-' }}</td>
+                            <td>{{ job.ai_tool }}</td>
                             <td><span class="badge {{ job.status_badge_class }}">{{ job.status_label }}</span></td>
                             <td>
                                 <div class="status-progress" aria-label="پیشرفت پردازش">

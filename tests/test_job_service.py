@@ -19,7 +19,11 @@ def prepare_database():
 
 
 def test_transaction_rolls_back_on_media_failure():
-    job_payload = {"title": "Video Editing", "description": "Edit promo video"}
+    job_payload = {
+        "title": "Video Editing",
+        "description": "Edit promo video",
+        "ai_tool": "Runway Gen-2",
+    }
     faulty_media_payloads = [{"media_type": "video", "media_url": ""}]
     campaign_payload = {"name": "Launch Campaign"}
 
@@ -37,7 +41,11 @@ def test_transaction_rolls_back_on_media_failure():
 
 
 def test_media_defaults_to_job_title_when_name_missing():
-    job_payload = {"title": "Social Clip", "description": "Short clip"}
+    job_payload = {
+        "title": "Social Clip",
+        "description": "Short clip",
+        "ai_tool": "Synthesia",
+    }
     media_payloads = [
         {"media_type": "video/mp4", "media_url": "https://cdn.example/video.mp4"}
     ]
@@ -55,10 +63,15 @@ def test_media_defaults_to_job_title_when_name_missing():
         assert persisted_job.progress_percent == 0
         assert persisted_job.media, "Job should have related media"
         assert persisted_job.media[0].job_name == "Social Clip"
+        assert persisted_job.ai_tool == "Synthesia"
 
 
 def test_media_storage_key_defaults_to_derived_value_when_missing():
-    job_payload = {"title": "Teaser", "description": "Short teaser"}
+    job_payload = {
+        "title": "Teaser",
+        "description": "Short teaser",
+        "ai_tool": "Pika Labs",
+    }
     media_url = "https://videos.example.com/teaser.mp4"
     media_payloads = [
         {"media_type": "video/mp4", "media_url": media_url, "storage_url": media_url}
@@ -80,10 +93,15 @@ def test_media_storage_key_defaults_to_derived_value_when_missing():
             persisted_job.media[0].storage_key
             == "videos.example.com/teaser.mp4"
         )
+        assert persisted_job.ai_tool == "Pika Labs"
 
 
 def test_media_storage_key_handles_trailing_slash_urls():
-    job_payload = {"title": "Docs", "description": None}
+    job_payload = {
+        "title": "Docs",
+        "description": None,
+        "ai_tool": "Midjourney",
+    }
     media_url = "https://github.com/"
     media_payloads = [
         {"media_type": "video/mp4", "media_url": media_url, "storage_url": media_url}
@@ -102,6 +120,7 @@ def test_media_storage_key_handles_trailing_slash_urls():
         assert persisted_job.progress_percent == 0
         assert persisted_job.media, "Job should have related media"
         assert persisted_job.media[0].storage_key == "github.com"
+        assert persisted_job.ai_tool == "Midjourney"
 
 
 def test_create_job_uses_provided_session_without_factory():
@@ -136,7 +155,11 @@ def test_create_job_uses_provided_session_without_factory():
 
 
 def test_campaign_payload_requires_non_empty_name():
-    job_payload = {"title": "Promo", "description": ""}
+    job_payload = {
+        "title": "Promo",
+        "description": "",
+        "ai_tool": "D-ID",
+    }
     media_payloads = [
         {"media_type": "image/png", "media_url": "https://cdn.example.com/banner.png"}
     ]
@@ -151,7 +174,11 @@ def test_campaign_payload_requires_non_empty_name():
 
 
 def test_campaign_name_is_trimmed_before_persist():
-    job_payload = {"title": "Promo Video", "description": ""}
+    job_payload = {
+        "title": "Promo Video",
+        "description": "",
+        "ai_tool": "HeyGen",
+    }
     media_payloads = [
         {"media_type": "video/mp4", "media_url": "https://cdn.example.com/video.mp4"}
     ]
@@ -170,3 +197,6 @@ def test_campaign_name_is_trimmed_before_persist():
         )
 
         assert campaign.name == "Launch"
+        job_row = session.get(Job, job.id)
+        assert job_row is not None
+        assert job_row.ai_tool == "HeyGen"

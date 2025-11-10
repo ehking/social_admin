@@ -12,11 +12,11 @@
     </header>
     <form method="post" action="/manual-video" class="form-grid">
         <div class="form-field">
-            <label for="title">عنوان ویدیو</label>
+            <label for="title">عنوان ویدیو <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="text" id="title" name="title" required>
         </div>
         <div class="form-field">
-            <label for="media_url">لینک فایل ویدیو</label>
+            <label for="media_url">لینک فایل ویدیو <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="url" id="media_url" name="media_url" placeholder="https://..." required>
         </div>
         <div class="form-field">
@@ -28,7 +28,7 @@
             <textarea id="description" name="description" rows="3" placeholder="توضیحات اختیاری"></textarea>
         </div>
         <div class="form-field">
-            <label for="campaign_name">نام کمپین</label>
+            <label for="campaign_name">نام کمپین <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="text" id="campaign_name" name="campaign_name" required>
         </div>
         <div class="form-field full">

@@ -1,7 +1,17 @@
 from datetime import datetime
 from enum import Enum as PyEnum
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -13,6 +23,16 @@ class AdminRole(str, PyEnum):
     SUPERADMIN = "superadmin"
     ADMIN = "admin"
     VIEWER = "viewer"
+
+
+class AdminMenu(str, PyEnum):
+    DASHBOARD = "dashboard"
+    ACCOUNTS = "accounts"
+    SCHEDULER = "scheduler"
+    MANUAL_VIDEO = "manual_video"
+    SETTINGS = "settings"
+    DOCUMENTATION = "documentation"
+    LOGS = "logs"
 
 
 class EncryptedText(TypeDecorator):
@@ -40,6 +60,20 @@ class AdminUser(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(AdminRole, name="admin_role"), nullable=False, default=AdminRole.ADMIN)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AdminMenuPermission(Base):
+    __tablename__ = "admin_menu_permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    role = Column(Enum(AdminRole, name="admin_role"), nullable=False)
+    menu = Column(Enum(AdminMenu, name="admin_menu"), nullable=False)
+    is_allowed = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("role", "menu", name="uq_admin_menu_permissions_role_menu"),
+    )
 
 
 class ServiceToken(Base):

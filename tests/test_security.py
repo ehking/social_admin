@@ -14,6 +14,7 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 from app.backend import auth, models
 from app.backend.database import Base
 from app.backend.security import crypto
+from app.backend.services import permissions as permissions_service
 
 
 @pytest.fixture(autouse=True)
@@ -100,6 +101,70 @@ def test_viewer_role_cannot_access_admin_only_section(session_factory):
             )
 
         assert exc_info.value.status_code == 403
+    finally:
+        session.close()
+
+
+def test_menu_access_enforced_by_permissions(session_factory):
+    session = session_factory()
+    try:
+        permissions_service.ensure_default_permissions(session)
+        viewer = models.AdminUser(
+            username="viewer-acl",
+            password_hash="dummy-hash",
+            role=models.AdminRole.VIEWER,
+        )
+        session.add(viewer)
+        session.commit()
+
+        viewer_permissions = {
+            definition.key.value: (
+                definition.key is models.AdminMenu.DASHBOARD
+            )
+            for definition in permissions_service.list_menu_definitions()
+        }
+        permissions_service.apply_permission_updates(
+            session,
+            {models.AdminRole.VIEWER.value: viewer_permissions},
+        )
+
+        scope_forbidden = {
+            "type": "http",
+            "method": "GET",
+            "path": "/scheduler",
+            "headers": [],
+            "session": {"user_id": viewer.id},
+        }
+
+        async def receive() -> dict:
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        forbidden_request = Request(scope_forbidden, receive=receive)
+
+        with pytest.raises(HTTPException) as exc_info:
+            auth.get_logged_in_user(
+                forbidden_request,
+                session,
+                required_menu=models.AdminMenu.SCHEDULER,
+            )
+
+        assert exc_info.value.status_code == 403
+
+        scope_allowed = {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [],
+            "session": {"user_id": viewer.id},
+        }
+
+        allowed_request = Request(scope_allowed, receive=receive)
+        user = auth.get_logged_in_user(
+            allowed_request,
+            session,
+            required_menu=models.AdminMenu.DASHBOARD,
+        )
+        assert user is not None
     finally:
         session.close()
 

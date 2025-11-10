@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Mapping
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -120,4 +121,19 @@ class SettingsPresenter:
                 "Attempted to delete non-existent service token",
                 extra={"user_id": user.id, "token_id": token_id},
             )
+        return RedirectResponse(url="/settings", status_code=302)
+
+    def update_permissions(
+        self,
+        *,
+        db: Session,
+        user: models.AdminUser,
+        form_data: Mapping[str, object],
+    ) -> RedirectResponse:
+        updates = permissions_service.parse_permission_updates(form_data)
+        permissions_service.apply_permission_updates(db, updates)
+        self.logger.info(
+            "Menu permissions updated",
+            extra={"user_id": user.id},
+        )
         return RedirectResponse(url="/settings", status_code=302)

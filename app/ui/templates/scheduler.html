@@ -12,7 +12,7 @@
     </header>
     <form method="post" action="/scheduler" class="form-grid">
         <div class="form-field">
-            <label for="account_id">حساب</label>
+            <label for="account_id">حساب <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <select name="account_id" id="account_id" required>
                 <option value="" disabled selected>یک حساب را انتخاب کنید</option>
                 {% for account in accounts %}
@@ -21,7 +21,7 @@
             </select>
         </div>
         <div class="form-field">
-            <label for="title">عنوان</label>
+            <label for="title">عنوان <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="text" id="title" name="title" required>
         </div>
         <div class="form-field full">
@@ -33,7 +33,7 @@
             <input type="url" id="video_url" name="video_url" placeholder="https://...">
         </div>
         <div class="form-field">
-            <label for="scheduled_time">تاریخ و زمان اجرا</label>
+            <label for="scheduled_time">تاریخ و زمان اجرا <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <input type="datetime-local" id="scheduled_time" name="scheduled_time" required>
         </div>
         <div class="form-actions">

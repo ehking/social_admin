@@ -18,6 +18,8 @@ from app.backend.services.data_access import (
     SocialAccountService,
 )
 
+from .helpers import build_layout_context
+
 
 @dataclass(slots=True)
 class DashboardPresenter:

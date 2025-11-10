@@ -15,6 +15,8 @@ from app.backend import models
 from app.backend.services import create_job_with_media_and_campaign
 from app.backend.services.data_access import DatabaseServiceError, JobQueryService
 
+from .helpers import build_layout_context
+
 
 @dataclass(slots=True)
 class ManualVideoPresenter:

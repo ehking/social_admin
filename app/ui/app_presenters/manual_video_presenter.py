@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -33,23 +33,9 @@ from app.backend.services.data_access import DatabaseServiceError, JobQueryServi
 from app.backend.ai_workflow import TOOLS
 
 try:  # pragma: no cover - optional dependency in minimal test environments
-    import requests
-except Exception:  # pragma: no cover - fallback when requests unavailable
-    requests = None  # type: ignore[assignment]
-
-
-@contextmanager
-def _response_context(response):
-    if hasattr(response, "__enter__") and hasattr(response, "__exit__"):
-        with response:
-            yield response
-    else:
-        try:
-            yield response
-        finally:
-            close = getattr(response, "close", None)
-            if callable(close):
-                close()
+    import httpx
+except Exception:  # pragma: no cover - fallback when httpx unavailable
+    httpx = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True, slots=True)
@@ -348,10 +334,10 @@ class ManualVideoPresenter:
         parsed = urlparse(url)
         return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
-    def _download_manual_video_preview(self, url: str, *, job_id: int) -> Optional[Path]:
-        if requests is None:
+    async def _download_manual_video_preview(self, url: str, *, job_id: int) -> Optional[Path]:
+        if httpx is None:
             self.logger.warning(
-                "requests library is unavailable; cannot download manual video preview",
+                "httpx library is unavailable; cannot download manual video preview",
                 extra={"url": url},
             )
             return None
@@ -362,9 +348,11 @@ class ManualVideoPresenter:
             job_id=job_id,
             purpose="manual_video_preview",
         )
+        response: httpx.Response | None = None
         try:
-            response = requests.get(url, timeout=15, stream=True)
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.get(url)
+                response.raise_for_status()
             log_request_success(
                 "GET",
                 url,
@@ -395,21 +383,22 @@ class ManualVideoPresenter:
         target_path = target_dir / f"job-{job_id}{suffix}"
 
         try:
-            with _response_context(response):
-                with target_path.open("wb") as handle:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            handle.write(chunk)
+            if response is not None:
+                content = await response.aread()
+                await asyncio.to_thread(target_path.write_bytes, content)
         except Exception as exc:  # pragma: no cover - defensive for IO errors
             self.logger.error(
                 "Failed to persist manual video preview",
                 extra={"url": url, "destination": str(target_path), "error": str(exc)},
             )
             return None
+        finally:
+            if response is not None:
+                await response.aclose()
 
         return target_path
 
-    def _dispatch_manual_job_to_ai(
+    async def _dispatch_manual_job_to_ai(
         self,
         *,
         job_id: int,
@@ -437,7 +426,7 @@ class ManualVideoPresenter:
             payload["campaign_description"] = campaign_description
 
         try:
-            result = dispatch_manual_video_job(job_id, payload)
+            result = await dispatch_manual_video_job(job_id, payload)
         except AIServiceConfigurationError:
             self.logger.info(
                 "AI service endpoint is not configured; skipping dispatch",
@@ -462,7 +451,7 @@ class ManualVideoPresenter:
         )
         return result
 
-    def create_manual_video(
+    async def create_manual_video(
         self,
         *,
         request: Request,
@@ -575,7 +564,7 @@ class ManualVideoPresenter:
 
         if job and job.id:
             if self._should_download_media(clean_media_url):
-                local_path = self._download_manual_video_preview(
+                local_path = await self._download_manual_video_preview(
                     clean_media_url, job_id=job.id
                 )
                 if local_path:
@@ -588,7 +577,7 @@ class ManualVideoPresenter:
                         },
                     )
 
-            self._dispatch_manual_job_to_ai(
+            await self._dispatch_manual_job_to_ai(
                 job_id=job.id,
                 user=user,
                 title=clean_title,

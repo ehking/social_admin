@@ -1,9 +1,12 @@
+import asyncio
 from datetime import datetime
 import json
 from types import SimpleNamespace
 
 import pathlib
 import sys
+
+import pytest
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -85,30 +88,50 @@ def test_build_job_view_includes_error_details(tmp_path):
 
 
 def test_download_manual_video_preview_persists_file(monkeypatch, tmp_path):
+    calls = []
+
     class DummyResponse:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
-        def iter_content(self, chunk_size=8192):  # pragma: no cover - simple iterator
-            yield b"chunk-data"
+        async def aread(self):  # pragma: no cover - simple async reader
+            return b"chunk-data"
 
-    class DummyRequests:
-        def __init__(self):
-            self.calls = []
+        async def aclose(self):
+            calls.append("closed")
 
-        def get(self, url, timeout=15, stream=True):
-            self.calls.append((url, timeout, stream))
+    class DummyAsyncClient:
+        def __init__(self, timeout=15):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # pragma: no cover - no-op
+            return False
+
+        async def get(self, url):
+            calls.append((url, self.timeout))
             return DummyResponse()
 
-    dummy_requests = DummyRequests()
-    monkeypatch.setattr(manual_video_presenter, "requests", dummy_requests)
+    class DummyHttpx:
+        def __init__(self):
+            self.calls = calls
+
+        def AsyncClient(self, timeout=15):  # pragma: no cover - factory pattern
+            return DummyAsyncClient(timeout)
+
+    monkeypatch.setattr(manual_video_presenter, "httpx", DummyHttpx())
 
     presenter = _create_presenter(tmp_path)
     url = "https://cdn.example/assets/video.mp4"
 
-    local_path = presenter._download_manual_video_preview(url, job_id=7)
+    local_path = asyncio.run(presenter._download_manual_video_preview(url, job_id=7))
 
-    assert dummy_requests.calls
+    assert (url, 15) in calls
+    assert "closed" in calls
     assert local_path is not None
     assert local_path.name == "job-7.mp4"
     assert local_path.read_bytes() == b"chunk-data"
@@ -139,7 +162,7 @@ def test_create_manual_video_dispatches_to_ai(monkeypatch, tmp_path):
 
     dispatch_calls = []
 
-    def fake_dispatch(job_id, payload):
+    async def fake_dispatch(job_id, payload):
         dispatch_calls.append((job_id, payload))
         return manual_video_presenter.DispatchResult(
             job_token="ext-55", response_payload={"job_id": "ext-55"}
@@ -157,17 +180,19 @@ def test_create_manual_video_dispatches_to_ai(monkeypatch, tmp_path):
     user = SimpleNamespace(id=7)
     ai_tool = presenter._ai_tools[0]
 
-    response = presenter.create_manual_video(
-        request=request,
-        db=db,
-        user=user,
-        title="نمونه ویدیو",
-        description="توضیحات",
-        media_url="https://cdn.example/video.mp4",
-        media_type="video/mp4",
-        campaign_name="کمپین نمونه",
-        campaign_description="توضیحات کمپین",
-        ai_tool=ai_tool,
+    response = asyncio.run(
+        presenter.create_manual_video(
+            request=request,
+            db=db,
+            user=user,
+            title="نمونه ویدیو",
+            description="توضیحات",
+            media_url="https://cdn.example/video.mp4",
+            media_type="video/mp4",
+            campaign_name="کمپین نمونه",
+            campaign_description="توضیحات کمپین",
+            ai_tool=ai_tool,
+        )
     )
 
     assert dispatch_calls

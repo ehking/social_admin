@@ -223,3 +223,74 @@ def test_processor_falls_back_to_get_when_head_returns_error(tmp_path, monkeypat
 
     assert head_calls, "HEAD request should be attempted"
     assert get_calls, "GET fallback should be attempted when HEAD errors"
+
+
+def test_processor_supports_uppercase_remote_scheme(tmp_path, monkeypatch):
+    logs_dir = tmp_path / "logs"
+
+    service = JobService()
+    job = service.create_job_with_media_and_campaign(
+        job_payload={"title": "Remote Clip", "description": ""},
+        media_payloads=[
+            {
+                "media_type": "video/mp4",
+                "media_url": "HTTPS://cdn.example/CLIP.MP4",
+            }
+        ],
+        campaign_payload={"name": "Campaign"},
+    )
+
+    class DummyHeadResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def close(self):
+            return None
+
+    head_calls: list[str] = []
+
+    def fake_head(url, timeout=0, allow_redirects=True):
+        head_calls.append(url)
+        return DummyHeadResponse()
+
+    monkeypatch.setattr(job_processor_module.requests, "head", fake_head)
+
+    processor = JobProcessor(log_directory=logs_dir, request_timeout=1.0)
+    processor.process_pending_jobs()
+
+    assert head_calls == ["HTTPS://cdn.example/CLIP.MP4"]
+
+    with SessionLocal() as session:
+        refreshed = session.get(Job, job.id)
+        assert refreshed is not None
+        assert refreshed.status == "completed"
+        assert refreshed.error_details is None
+
+
+def test_processor_accepts_uppercase_file_scheme(tmp_path):
+    logs_dir = tmp_path / "logs"
+    media_path = tmp_path / "clip.mp4"
+    media_path.write_bytes(b"content")
+
+    service = JobService()
+    job = service.create_job_with_media_and_campaign(
+        job_payload={"title": "Manual Clip", "description": ""},
+        media_payloads=[
+            {
+                "media_type": "video/mp4",
+                "media_url": f"FILE://{media_path}",
+            }
+        ],
+        campaign_payload={"name": "Campaign"},
+    )
+
+    processor = JobProcessor(log_directory=logs_dir)
+    processor.process_pending_jobs()
+
+    with SessionLocal() as session:
+        refreshed = session.get(Job, job.id)
+        assert refreshed is not None
+        assert refreshed.status == "completed"
+        assert refreshed.error_details is None

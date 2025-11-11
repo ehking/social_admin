@@ -210,7 +210,10 @@ class JobProcessor:
                 context={"media_id": media.id},
             )
 
-        if source.startswith("http://") or source.startswith("https://"):
+        normalized_source = source.casefold()
+        if normalized_source.startswith("http://") or normalized_source.startswith(
+            "https://"
+        ):
             return self._check_remote_media(source, media)
 
         path = self._resolve_local_path(source)
@@ -416,7 +419,7 @@ class JobProcessor:
 
     @staticmethod
     def _resolve_local_path(source: str) -> Path:
-        if source.startswith("file://"):
+        if source[:7].casefold() == "file://":
             return Path(source[7:])
         candidate = Path(source)
         if not candidate.is_absolute():

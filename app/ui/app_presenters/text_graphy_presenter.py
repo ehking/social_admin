@@ -133,6 +133,14 @@ class TextGraphyPresenter:
                 info = "پیش‌نمایش تکس گرافی با موفقیت ساخته شد."
             except CoverrAPIError as exc:
                 diagnostics = getattr(exc, "diagnostics", diagnostics)
+                self.logger.warning(
+                    "Coverr video lookup failed",
+                    extra={
+                        "error": str(exc),
+                        "coverr_reference": coverr_reference,
+                        "stage": "menu",
+                    },
+                )
                 error = str(exc)
             except LyricsProcessingError as exc:
                 diagnostics = getattr(exc, "diagnostics", diagnostics)

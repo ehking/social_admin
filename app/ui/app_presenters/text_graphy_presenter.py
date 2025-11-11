@@ -133,13 +133,29 @@ class TextGraphyPresenter:
                 info = "پیش‌نمایش تکس گرافی با موفقیت ساخته شد."
             except CoverrAPIError as exc:
                 diagnostics = getattr(exc, "diagnostics", diagnostics)
+                extra_payload = {
+                    "error": str(exc),
+                    "error_type": exc.__class__.__name__,
+                    "coverr_reference": coverr_reference,
+                    "stage": "menu",
+                }
+                if diagnostics and diagnostics.stages:
+                    extra_payload["diagnostics"] = [
+                        {
+                            "key": stage.key,
+                            "status": stage.status,
+                            "detail": stage.detail,
+                        }
+                        for stage in diagnostics.stages
+                    ]
+                cause = exc.__cause__ or exc.__context__
+                if cause:
+                    extra_payload["service_cause"] = (
+                        f"{cause.__class__.__name__}: {cause}"
+                    )
                 self.logger.warning(
                     "Coverr video lookup failed",
-                    extra={
-                        "error": str(exc),
-                        "coverr_reference": coverr_reference,
-                        "stage": "menu",
-                    },
+                    extra=extra_payload,
                 )
                 error = str(exc)
             except LyricsProcessingError as exc:

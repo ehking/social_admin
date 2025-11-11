@@ -31,6 +31,21 @@ class DummyResponse:
         return self._payload
 
 
+class SequencedHTTPClient:
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = []
+
+    def get(self, url, timeout=10):
+        self.calls.append((url, timeout))
+        if not self._responses:
+            raise AssertionError("No more responses configured for SequencedHTTPClient")
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
 class DummyHTTPClient:
     def __init__(self, payload):
         self.payload = payload
@@ -222,3 +237,19 @@ def test_service_logs_include_location_in_message(caplog):
     assert http.calls
     error_logs = [record.message for record in caplog.records if record.levelno >= logging.ERROR]
     assert any("service_location=" in message for message in error_logs)
+
+
+def test_fetch_coverr_fallback_when_primary_endpoint_fails():
+    payload = _build_payload()
+    error_response = ErroringResponse(status_code=404, text="missing")
+    http = SequencedHTTPClient([error_response, DummyResponse(payload)])
+    service = TextGraphyService(http_client=http, translator=FakeTranslator())
+
+    video = service.fetch_coverr_video("cozy-diner-scene-with-neon-eat-sign")
+
+    assert len(http.calls) == 2
+    first_url, _ = http.calls[0]
+    second_url, _ = http.calls[1]
+    assert first_url.startswith("https://api.coverr.co/videos/")
+    assert second_url.startswith("https://coverr.co/api/v3/videos")
+    assert video.identifier == payload["id"]

@@ -272,6 +272,20 @@ class JobProcessor:
 
         try:
             response.raise_for_status()
+        except requests.HTTPError as exc:
+            status_code = response.status_code
+            log_request_failure(
+                "HEAD",
+                url,
+                started_at=started_at,
+                error=exc,
+                job_id=media.job_id,
+                media_id=media.id,
+                status=status_code,
+                fallback="GET",
+            )
+            response.close()
+            return self._verify_remote_with_get(url, media)
         except requests.RequestException as exc:  # pragma: no cover - network errors vary
             log_request_failure(
                 "HEAD",

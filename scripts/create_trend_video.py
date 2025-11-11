@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import subprocess
 from pathlib import Path
 
 from app.backend.config import get_settings
@@ -12,6 +13,34 @@ from app.backend.services import TrendingVideoCreator, Worker, get_storage_servi
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 LOGGER = logging.getLogger(__name__)
+
+
+def ensure_repository_is_current() -> None:
+    """Run ``git pull`` in the project root before continuing."""
+
+    repo_root = Path(__file__).resolve().parents[1]
+    LOGGER.info("Updating repository in %%s", repo_root)
+    try:
+        result = subprocess.run(
+            ["git", "pull"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:  # pragma: no cover - environment guard
+        raise SystemExit("Git executable not found. Please install Git to continue.") from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.strip() if exc.stderr else str(exc)
+        raise SystemExit(f"Failed to update repository: {stderr}") from exc
+
+    stdout = result.stdout.strip()
+    if stdout:
+        LOGGER.info("git pull output:\n%s", stdout)
+
+    stderr = result.stderr.strip()
+    if stderr:
+        LOGGER.warning("git pull reported:\n%s", stderr)
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +68,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    ensure_repository_is_current()
     args = parse_args()
     LOGGER.info("Fetching top %s tracks for %s", args.limit, args.country.upper())
     tracks = TrendingVideoCreator.fetch_trending_tracks(country=args.country, limit=args.limit)

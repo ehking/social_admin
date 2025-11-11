@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import time
@@ -187,11 +188,17 @@ class TextGraphyService:
         try:
             response = self._perform_coverr_get(url)
         except Exception as exc:  # pragma: no cover - network dependent
-            LOGGER.exception("Failed to call Coverr API", exc_info=exc)
+            self._log_service_event(
+                logging.ERROR,
+                "Failed to call Coverr API",
+                extra=self._exception_metadata(exc),
+                exc_info=True,
+            )
             raise CoverrAPIError("عدم دسترسی به سرویس Coverr. لطفاً دوباره تلاش کنید.") from exc
 
         if getattr(response, "status_code", 200) >= 400:
-            LOGGER.error(
+            self._log_service_event(
+                logging.ERROR,
                 "Coverr API returned error",
                 extra={
                     "status": getattr(response, "status_code", None),
@@ -210,12 +217,21 @@ class TextGraphyService:
         try:
             payload = response.json()
         except Exception as exc:  # pragma: no cover - network dependent
-            LOGGER.exception("Invalid JSON from Coverr API", exc_info=exc)
+            self._log_service_event(
+                logging.ERROR,
+                "Invalid JSON from Coverr API",
+                extra=self._exception_metadata(exc),
+                exc_info=True,
+            )
             raise CoverrAPIError("پاسخ نامعتبر از سرویس Coverr دریافت شد.") from exc
 
         sources = self._extract_sources(payload)
         if not sources:
-            LOGGER.warning("Coverr response missing video sources", extra={"video_id": video_id})
+            self._log_service_event(
+                logging.WARNING,
+                "Coverr response missing video sources",
+                extra={"video_id": video_id},
+            )
 
         metadata = CoverrVideoMetadata(
             identifier=str(
@@ -251,14 +267,16 @@ class TextGraphyService:
                     raise
                 attempt += 1
                 delay = min(self._retry_backoff * attempt, 5.0)
-                LOGGER.warning(
+                extra = {
+                    "attempt": attempt,
+                    "max_retries": self._request_retries,
+                    "video_url": url,
+                }
+                extra.update(self._exception_metadata(exc))
+                self._log_service_event(
+                    logging.WARNING,
                     "Coverr API call failed, retrying",
-                    extra={
-                        "attempt": attempt,
-                        "max_retries": self._request_retries,
-                        "video_url": url,
-                        "error_type": exc.__class__.__name__,
-                    },
+                    extra=extra,
                 )
                 if delay > 0:
                     time.sleep(delay)
@@ -474,9 +492,69 @@ class TextGraphyService:
         try:
             translated = self._translator.translate(text)
         except Exception as exc:  # pragma: no cover - depends on external service
-            LOGGER.exception("Translation failed", exc_info=exc)
+            self._log_service_event(
+                logging.ERROR,
+                "Translation failed",
+                extra=self._exception_metadata(exc),
+                exc_info=True,
+            )
             raise LyricsProcessingError("ترجمه متن با خطا مواجه شد. لطفاً دوباره تلاش کنید.") from exc
         return translated
+
+    @staticmethod
+    def _exception_metadata(exc: Exception) -> dict[str, object]:
+        metadata: dict[str, object] = {
+            "error_type": exc.__class__.__name__,
+            "error_message": str(exc),
+        }
+        tb = exc.__traceback__
+        last_tb = None
+        while tb:
+            last_tb = tb
+            tb = tb.tb_next
+        if last_tb is not None:
+            frame = last_tb.tb_frame
+            try:
+                module = frame.f_globals.get("__name__", frame.f_code.co_filename)
+                function = frame.f_code.co_name
+                line = last_tb.tb_lineno
+            finally:
+                del frame
+            metadata.update(
+                {
+                    "error_origin_module": module,
+                    "error_origin_function": function,
+                    "error_origin_line": line,
+                    "error_origin": f"{module}:{function}:{line}",
+                }
+            )
+        return metadata
+
+    def _log_service_event(
+        self,
+        level: int,
+        message: str,
+        *,
+        extra: Optional[dict[str, object]] = None,
+        exc_info=None,
+    ) -> None:
+        payload: dict[str, object] = dict(extra) if extra else {}
+        frame = inspect.currentframe()
+        try:
+            caller = frame.f_back if frame is not None else None
+            if caller is not None:
+                module = caller.f_globals.get("__name__", caller.f_code.co_filename)
+                function = caller.f_code.co_name
+                line = caller.f_lineno
+                payload.setdefault("service_module", module)
+                payload.setdefault("service_function", function)
+                payload.setdefault("service_line", line)
+                payload.setdefault("service_location", f"{module}:{function}:{line}")
+        finally:
+            del frame
+            if "caller" in locals():
+                del caller
+        LOGGER.log(level, message, extra=payload, exc_info=exc_info)
 
     def _infer_translator_label(self, translator) -> str:
         if translator is None:

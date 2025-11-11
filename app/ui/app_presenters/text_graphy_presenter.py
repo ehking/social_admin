@@ -125,6 +125,7 @@ class TextGraphyPresenter:
                 "Invalid audio duration provided for Text Graphy submission",
                 error=exc,
                 coverr_reference=coverr_reference,
+                level=logging.WARNING,
             )
 
         if error is None:
@@ -148,6 +149,7 @@ class TextGraphyPresenter:
                     coverr_reference=coverr_reference,
                     diagnostics=diagnostics,
                     source_stage="menu",
+                    level=logging.ERROR,
                     **extra,
                 )
                 error = str(exc)
@@ -158,6 +160,7 @@ class TextGraphyPresenter:
                     error=exc,
                     coverr_reference=coverr_reference,
                     diagnostics=diagnostics,
+                    level=logging.ERROR,
                 )
                 error = str(exc)
             except TextGraphyServiceError as exc:
@@ -167,6 +170,7 @@ class TextGraphyPresenter:
                     error=exc,
                     coverr_reference=coverr_reference,
                     diagnostics=diagnostics,
+                    level=logging.ERROR,
                 )
                 error = str(exc)
             except Exception as exc:  # pragma: no cover - defensive branch
@@ -175,6 +179,7 @@ class TextGraphyPresenter:
                     error=exc,
                     coverr_reference=coverr_reference,
                     diagnostics=diagnostics,
+                    level=logging.ERROR,
                 )
                 self.logger.exception(
                     "Unexpected error while building Text Graphy plan",
@@ -227,6 +232,7 @@ class TextGraphyPresenter:
         error: Exception,
         coverr_reference: Optional[str] = None,
         diagnostics: Optional[TextGraphyDiagnostics] = None,
+        level: int = logging.WARNING,
         **extra: object,
     ) -> None:
         extra_payload: dict[str, object] = {"stage": "logs"}
@@ -234,6 +240,7 @@ class TextGraphyPresenter:
             extra_payload.update(extra)
         extra_payload["error"] = str(error)
         extra_payload["error_type"] = error.__class__.__name__
+        extra_payload.update(self._exception_metadata(error))
         if coverr_reference:
             extra_payload["coverr_reference"] = coverr_reference
         if diagnostics and diagnostics.stages:
@@ -245,7 +252,33 @@ class TextGraphyPresenter:
                 }
                 for stage in diagnostics.stages
             ]
-        self.logger.warning(message, extra=extra_payload)
+        self.logger.log(level, message, extra=extra_payload)
+
+    @staticmethod
+    def _exception_metadata(error: Exception) -> dict[str, object]:
+        metadata: dict[str, object] = {}
+        tb = error.__traceback__
+        last_tb = None
+        while tb:
+            last_tb = tb
+            tb = tb.tb_next
+        if last_tb is not None:
+            frame = last_tb.tb_frame
+            try:
+                module = frame.f_globals.get("__name__", frame.f_code.co_filename)
+                function = frame.f_code.co_name
+                line = last_tb.tb_lineno
+            finally:
+                del frame
+            metadata.update(
+                {
+                    "error_origin_module": module,
+                    "error_origin_function": function,
+                    "error_origin_line": line,
+                    "error_origin": f"{module}:{function}:{line}",
+                }
+            )
+        return metadata
 
     def _parse_duration(self, raw: Optional[str]) -> Optional[float]:
         if raw is None:

@@ -170,3 +170,21 @@ def test_build_plan_raises_for_empty_lyrics():
             lyrics_text="\n\n  ",
             audio_url=None,
         )
+
+
+def test_exception_metadata_reports_origin():
+    service = TextGraphyService(
+        http_client=DummyHTTPClient(_build_payload()),
+        translator=FakeTranslator(),
+    )
+
+    def _trigger_error():
+        raise ValueError("boom")
+
+    with pytest.raises(ValueError) as caught:
+        _trigger_error()
+
+    metadata = service._exception_metadata(caught.value)
+    assert metadata["error_type"] == "ValueError"
+    assert metadata["error_origin_function"] == "_trigger_error"
+    assert metadata["error_origin_line"] > 0

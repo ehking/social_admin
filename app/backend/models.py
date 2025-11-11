@@ -29,6 +29,7 @@ class AdminMenu(str, PyEnum):
     DASHBOARD = "dashboard"
     ACCOUNTS = "accounts"
     SCHEDULER = "scheduler"
+    TEXT_GRAPHY = "text_graphy"
     MANUAL_VIDEO = "manual_video"
     SETTINGS = "settings"
     DOCUMENTATION = "documentation"

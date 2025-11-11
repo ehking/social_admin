@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}تکس گرافی | Social Admin{% endblock %}
+{% block page_title %}تکس گرافی{% endblock %}
+{% block page_subtitle %}ساخت زیرنویس فتوتایپی فارسی هماهنگ با موزیک بر پایه ویدیوهای Coverr{% endblock %}
+{% block extra_head %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/iran-nastaliq-font@v1.0.0/dist/font-face.css">
+{% endblock %}
+{% block content %}
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>مشخصات محتوا</h2>
+            <p class="panel-description">لینک ویدیو از Coverr، موزیک و متن ترانه را وارد کنید</p>
+        </div>
+    </header>
+    <form method="post" action="/text-graphy" class="form-grid">
+        <div class="form-field full">
+            <label for="coverr_reference">شناسه یا لینک ویدیو Coverr <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
+            <input type="text" id="coverr_reference" name="coverr_reference" placeholder="مثلاً sunset-over-the-lake یا https://coverr.co/videos/..." value="{{ form_state.coverr_reference }}" required>
+        </div>
+        <div class="form-field">
+            <label for="music_url">لینک فایل موزیک</label>
+            <input type="url" id="music_url" name="music_url" placeholder="https://..." value="{{ form_state.music_url }}">
+            <small class="form-hint">در صورت خالی بودن، ویدیو بدون موسیقی پخش می‌شود.</small>
+        </div>
+        <div class="form-field">
+            <label for="music_duration">مدت زمان موزیک</label>
+            <input type="text" id="music_duration" name="music_duration" placeholder="mm:ss یا ثانیه" value="{{ form_state.music_duration }}">
+            <small class="form-hint">در صورت تعیین، زمان‌بندی خطوط متن دقیق‌تر خواهد شد.</small>
+        </div>
+        <div class="form-field full">
+            <label for="lyrics_text">متن موزیک <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
+            <textarea id="lyrics_text" name="lyrics_text" rows="6" placeholder="متن اصلی موزیک را وارد کنید" required>{{ form_state.lyrics_text }}</textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn">ساخت پیش‌نمایش</button>
+        </div>
+    </form>
+    <p class="panel-footnote">نکته: جهت استفاده از API عمومی Coverr می‌توانید از شناسه‌های موجود در <a href="https://coverr.co" target="_blank" rel="noopener">کتابخانه ویدیو</a> کمک بگیرید.</p>
+</section>
+{% if result %}
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>پیش‌نمایش تکس گرافی</h2>
+            <p class="panel-description">ترجمه فارسی با فونت نستعلیق به صورت زنده روی ویدیو نمایش داده می‌شود</p>
+        </div>
+    </header>
+    <div class="text-graphy-preview">
+        <div class="text-graphy-player" data-lines='{{ result.lines_json | safe }}'>
+            <video class="text-graphy-video" controls preload="metadata" {% if result.audio_url %}muted{% endif %} poster="{{ result.video.thumbnail_url }}">
+                {% for source in result.video.sources %}
+                    <source src="{{ source.url }}" type="video/mp4" data-quality="{{ source.quality }}">
+                {% endfor %}
+                {% if not result.video.sources and result.video.preview_url %}
+                    <source src="{{ result.video.preview_url }}" type="video/mp4">
+                {% endif %}
+                مرورگر شما از پخش ویدیو پشتیبانی نمی‌کند.
+            </video>
+            {% if result.audio_url %}
+                <audio class="text-graphy-audio" src="{{ result.audio_url }}" preload="metadata"></audio>
+            {% endif %}
+            <div class="text-graphy-overlay" aria-live="polite">
+                <div class="text-graphy-overlay-content">
+                    <span class="text-graphy-overlay-text"></span>
+                </div>
+            </div>
+        </div>
+        <aside class="text-graphy-meta">
+            <dl>
+                <div>
+                    <dt>عنوان ویدیو</dt>
+                    <dd>{{ result.video.title }}</dd>
+                </div>
+                <div>
+                    <dt>شناسه Coverr</dt>
+                    <dd>{{ result.video.identifier }}</dd>
+                </div>
+                <div>
+                    <dt>مدت‌نمایش متن</dt>
+                    <dd>{{ result.total_duration | round(1) }} ثانیه</dd>
+                </div>
+                {% if result.audio_url %}
+                    <div>
+                        <dt>لینک موزیک</dt>
+                        <dd><a href="{{ result.audio_url }}" target="_blank" rel="noopener">پخش در پنجره جدید</a></dd>
+                    </div>
+                {% endif %}
+            </dl>
+            {% if result.video.sources %}
+                <a class="btn btn-secondary btn-small" href="{{ result.video.sources[0].url }}" target="_blank" rel="noopener">دانلود نسخه پیشنهادی</a>
+            {% elif result.video.preview_url %}
+                <a class="btn btn-secondary btn-small" href="{{ result.video.preview_url }}" target="_blank" rel="noopener">نمایش در Coverr</a>
+            {% endif %}
+        </aside>
+    </div>
+    <div class="text-graphy-lyrics">
+        <header>
+            <h3>تقسیم‌بندی و ترجمه خطوط</h3>
+            <p>زمان‌بندی هر خط نسبت به مدت‌زمان موزیک محاسبه شده است.</p>
+        </header>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>شروع → پایان</th>
+                        <th>متن اصلی</th>
+                        <th>ترجمه فارسی</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in result.lines %}
+                        <tr>
+                            <td>{{ line.index + 1 }}</td>
+                            <td>{{ line.start_timestamp() }} → {{ line.end_timestamp() }}</td>
+                            <td>{{ line.original }}</td>
+                            <td class="text-graphy-translation">{{ line.translated }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <details class="text-graphy-webvtt">
+        <summary>دریافت زیرنویس WEBVTT</summary>
+        <pre>{{ result.webvtt }}</pre>
+    </details>
+</section>
+{% endif %}
+{% endblock %}
+{% block extra_scripts %}
+    {{ super() }}
+    <script>
+        (() => {
+            const player = document.querySelector('.text-graphy-player');
+            if (!player) {
+                return;
+            }
+            let lines = [];
+            try {
+                lines = JSON.parse(player.dataset.lines || '[]');
+            } catch (err) {
+                console.error('Failed to parse lines for Text Graphy', err);
+                lines = [];
+            }
+            const video = player.querySelector('video');
+            const audio = player.querySelector('audio');
+            const overlayText = player.querySelector('.text-graphy-overlay-text');
+            let activeIndex = -1;
+
+            const updateOverlay = () => {
+                if (!video || !overlayText) {
+                    return;
+                }
+                const position = video.currentTime || 0;
+                let nextLine = null;
+                for (const line of lines) {
+                    if (position >= line.start && position < line.end) {
+                        nextLine = line;
+                        break;
+                    }
+                }
+                if (!nextLine) {
+                    overlayText.textContent = '';
+                    player.classList.remove('has-line');
+                    activeIndex = -1;
+                    return;
+                }
+                if (activeIndex === nextLine.index) {
+                    return;
+                }
+                overlayText.textContent = nextLine.translated;
+                player.classList.add('has-line');
+                activeIndex = nextLine.index;
+            };
+
+            const syncMedia = () => {
+                if (!video || !audio) {
+                    return;
+                }
+                if (Math.abs((audio.currentTime || 0) - (video.currentTime || 0)) > 0.3) {
+                    audio.currentTime = video.currentTime;
+                }
+            };
+
+            if (video) {
+                video.addEventListener('timeupdate', () => {
+                    updateOverlay();
+                    syncMedia();
+                });
+                video.addEventListener('seeking', () => {
+                    activeIndex = -1;
+                    updateOverlay();
+                    if (audio) {
+                        audio.currentTime = video.currentTime || 0;
+                    }
+                });
+                video.addEventListener('play', () => {
+                    updateOverlay();
+                    if (audio) {
+                        if (audio.paused) {
+                            const startPlayback = () => {
+                                audio.currentTime = video.currentTime || 0;
+                                audio.play().catch((err) => console.warn('Audio playback blocked', err));
+                            };
+                            if (audio.readyState >= 2) {
+                                startPlayback();
+                            } else {
+                                const handler = () => {
+                                    audio.removeEventListener('canplay', handler);
+                                    startPlayback();
+                                };
+                                audio.addEventListener('canplay', handler);
+                            }
+                        }
+                    }
+                });
+                video.addEventListener('pause', () => {
+                    if (audio && !audio.paused) {
+                        audio.pause();
+                    }
+                });
+            }
+
+            if (audio) {
+                audio.addEventListener('ended', () => {
+                    if (video && !video.paused) {
+                        video.pause();
+                    }
+                });
+            }
+        })();
+    </script>
+{% endblock %}

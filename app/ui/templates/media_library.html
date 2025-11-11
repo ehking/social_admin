@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}کتابخانه مدیا | Social Admin{% endblock %}
+{% block page_title %}کتابخانه مدیا{% endblock %}
+{% block page_subtitle %}همه ویدیوها و فایل‌های چندرسانه‌ای تولید شده در یک نگاه{% endblock %}
+{% block content %}
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>مرور رسانه‌ها</h2>
+            <p class="panel-description">آخرین خروجی‌های سیستم شامل ویدیو، تصویر و صوت.</p>
+        </div>
+    </header>
+    <div class="media-library-summary" role="list">
+        <span role="listitem">تعداد کل: {{ media_summary.total }}</span>
+        <span role="listitem">ویدیو: {{ media_summary.video }}</span>
+        <span role="listitem">تصویر: {{ media_summary.image }}</span>
+        <span role="listitem">صوت: {{ media_summary.audio }}</span>
+        <span role="listitem">سایر: {{ media_summary.other }}</span>
+    </div>
+    {% if media_items %}
+        <div class="media-library-grid" role="list">
+            {% for item in media_items %}
+                <article class="media-card" role="listitem">
+                    <div class="media-card-preview" data-category="{{ item.category }}">
+                        {% if item.preview_url %}
+                            {% if item.category == 'video' %}
+                                <video controls preload="metadata">
+                                    <source src="{{ item.preview_url }}" type="{{ item.media_type }}">
+                                    مرورگر شما از پخش ویدیو پشتیبانی نمی‌کند.
+                                </video>
+                            {% elif item.category == 'image' %}
+                                <img src="{{ item.preview_url }}" alt="{{ item.title }}">
+                            {% elif item.category == 'audio' %}
+                                <audio controls>
+                                    <source src="{{ item.preview_url }}" type="{{ item.media_type }}">
+                                    مرورگر شما از پخش صوت پشتیبانی نمی‌کند.
+                                </audio>
+                            {% else %}
+                                <a class="media-card-link" href="{{ item.preview_url }}" target="_blank" rel="noopener">دانلود فایل</a>
+                            {% endif %}
+                        {% else %}
+                            <div class="media-card-placeholder">برای این رسانه لینک پیش‌نمایش ثبت نشده است.</div>
+                        {% endif %}
+                    </div>
+                    <div class="media-card-body">
+                        <h3 class="media-card-title">{{ item.title }}</h3>
+                        <dl class="media-card-meta">
+                            <div>
+                                <dt>نوع فایل</dt>
+                                <dd>{{ item.media_type or 'نامشخص' }}</dd>
+                            </div>
+                            {% if item.job_id %}
+                            <div>
+                                <dt>شناسه وظیفه</dt>
+                                <dd>#{{ item.job_id }}</dd>
+                            </div>
+                            {% endif %}
+                            {% if item.job_title %}
+                            <div>
+                                <dt>عنوان وظیفه</dt>
+                                <dd>{{ item.job_title }}</dd>
+                            </div>
+                            {% endif %}
+                            {% if item.job_status %}
+                            <div>
+                                <dt>وضعیت</dt>
+                                <dd>{{ item.job_status }}</dd>
+                            </div>
+                            {% endif %}
+                            {% if item.campaign_name %}
+                            <div>
+                                <dt>کمپین</dt>
+                                <dd>{{ item.campaign_name }}</dd>
+                            </div>
+                            {% endif %}
+                            <div>
+                                <dt>منبع فایل</dt>
+                                <dd>{{ item.source_label }}</dd>
+                            </div>
+                            <div>
+                                <dt>تاریخ ثبت</dt>
+                                <dd>{{ item.created_display }}</dd>
+                            </div>
+                        </dl>
+                        {% if item.preview_url %}
+                        <div class="media-card-actions">
+                            <a class="btn btn-secondary btn-small" href="{{ item.preview_url }}" target="_blank" rel="noopener">نمایش یا دانلود</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty">هنوز رسانه‌ای برای نمایش وجود ندارد. با ثبت ویدیو جدید این بخش تکمیل خواهد شد.</p>
+    {% endif %}
+</section>
+{% endblock %}

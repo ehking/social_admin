@@ -26,6 +26,7 @@ MENU_DEFINITIONS: List[MenuDefinition] = [
     MenuDefinition(models.AdminMenu.SCHEDULER, "زمان‌بندی محتوا", "/scheduler"),
     MenuDefinition(models.AdminMenu.TEXT_GRAPHY, "تکس گرافی", "/text-graphy"),
     MenuDefinition(models.AdminMenu.MANUAL_VIDEO, "ویدیو دستی", "/manual-video"),
+    MenuDefinition(models.AdminMenu.MEDIA_LIBRARY, "کتابخانه مدیا", "/media-library"),
     MenuDefinition(models.AdminMenu.SETTINGS, "تنظیمات", "/settings"),
     MenuDefinition(models.AdminMenu.DOCUMENTATION, "مستندات", "/documentation"),
     MenuDefinition(models.AdminMenu.LOGS, "لاگ‌ها", "/logs"),

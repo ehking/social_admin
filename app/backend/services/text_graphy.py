@@ -54,6 +54,30 @@ class CoverrVideoSource:
     format: str
     url: str
 
+    @property
+    def mime_type(self) -> str:
+        """Return the most appropriate MIME type for the video source."""
+
+        fmt = (self.format or "").strip().lower()
+        if not fmt:
+            return "video/mp4"
+
+        mime_overrides = {
+            "mp4": "video/mp4",
+            "m4v": "video/mp4",
+            "mov": "video/quicktime",
+            "webm": "video/webm",
+            "ogv": "video/ogg",
+        }
+        if fmt in mime_overrides:
+            return mime_overrides[fmt]
+
+        if "/" in fmt:
+            # Already a MIME type such as "video/mp4".
+            return fmt
+
+        return f"video/{fmt}"
+
 
 @dataclass(frozen=True, slots=True)
 class CoverrVideoMetadata:

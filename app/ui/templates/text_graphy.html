@@ -110,9 +110,9 @@
     </header>
     <div class="text-graphy-preview">
         <div class="text-graphy-player" data-lines='{{ result.lines_json | safe }}'>
-            <video class="text-graphy-video" controls preload="metadata" {% if result.audio_url %}muted{% endif %} poster="{{ result.video.thumbnail_url }}">
+            <video class="text-graphy-video" controls preload="metadata" {% if result.audio_url %}muted{% endif %} poster="{{ result.video.thumbnail_url }}" crossorigin="anonymous">
                 {% for source in result.video.sources %}
-                    <source src="{{ source.url }}" type="video/mp4" data-quality="{{ source.quality }}">
+                    <source src="{{ source.url }}" type="{{ source.mime_type }}" data-quality="{{ source.quality }}" data-format="{{ source.format }}">
                 {% endfor %}
                 {% if not result.video.sources and result.video.preview_url %}
                     <source src="{{ result.video.preview_url }}" type="video/mp4">
@@ -127,6 +127,15 @@
                     <span class="text-graphy-overlay-text"></span>
                 </div>
             </div>
+            {% if result.video.sources %}
+                <a class="btn btn-secondary btn-small text-graphy-download-button" href="{{ result.video.sources[0].url }}" download>
+                    دانلود ویدیو
+                </a>
+            {% elif result.video.preview_url %}
+                <a class="btn btn-secondary btn-small text-graphy-download-button" href="{{ result.video.preview_url }}" target="_blank" rel="noopener">
+                    نمایش در Coverr
+                </a>
+            {% endif %}
         </div>
         <aside class="text-graphy-meta">
             <dl>
@@ -161,7 +170,21 @@
                 {% endif %}
             </dl>
             {% if result.video.sources %}
-                <a class="btn btn-secondary btn-small" href="{{ result.video.sources[0].url }}" target="_blank" rel="noopener">دانلود نسخه پیشنهادی</a>
+                <a class="btn btn-secondary btn-small" href="{{ result.video.sources[0].url }}" target="_blank" rel="noopener" download>دانلود نسخه پیشنهادی</a>
+                <div class="text-graphy-video-downloads">
+                    <h3>کیفیت‌های در دسترس</h3>
+                    <ul class="text-graphy-source-list">
+                        {% for source in result.video.sources %}
+                            <li class="text-graphy-source-item">
+                                <span class="text-graphy-source-label">{{ source.quality|upper }} · {{ source.format|upper }}</span>
+                                <span class="text-graphy-source-actions">
+                                    <a class="link" href="{{ source.url }}" target="_blank" rel="noopener">پخش</a>
+                                    <a class="link" href="{{ source.url }}" download>دانلود</a>
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             {% elif result.video.preview_url %}
                 <a class="btn btn-secondary btn-small" href="{{ result.video.preview_url }}" target="_blank" rel="noopener">نمایش در Coverr</a>
             {% endif %}

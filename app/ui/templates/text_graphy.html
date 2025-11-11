@@ -199,19 +199,29 @@
         <summary>دریافت زیرنویس WEBVTT</summary>
         <pre>{{ result.webvtt }}</pre>
         <div class="text-graphy-download-actions">
-            <button type="button" class="btn btn-secondary btn-small" data-action="download-webvtt">
-                دانلود فایل WEBVTT
-            </button>
-            <button type="button" class="btn btn-secondary btn-small" data-action="download-lines-json">
-                دانلود ساختار خطوط (JSON)
-            </button>
+            {% if result.downloads %}
+                <a class="btn btn-secondary btn-small" href="{{ result.downloads.webvtt_url }}" download>
+                    دانلود فایل WEBVTT
+                </a>
+                <a class="btn btn-secondary btn-small" href="{{ result.downloads.lines_json_url }}" download>
+                    دانلود ساختار خطوط (JSON)
+                </a>
+            {% else %}
+                <button type="button" class="btn btn-secondary btn-small" data-action="download-webvtt">
+                    دانلود فایل WEBVTT
+                </button>
+                <button type="button" class="btn btn-secondary btn-small" data-action="download-lines-json">
+                    دانلود ساختار خطوط (JSON)
+                </button>
+            {% endif %}
         </div>
     </details>
     <script type="application/json" id="text-graphy-downloads-data">
         {{ {
             'webvtt': result.webvtt,
             'lines_json': result.lines_json,
-            'video_identifier': result.video.identifier
+            'video_identifier': result.video.identifier,
+            'downloads': result.downloads
         } | tojson }}
     </script>
 </section>
@@ -349,33 +359,36 @@
                 }
             };
 
-            const webvttButton = document.querySelector('[data-action="download-webvtt"]');
-            if (webvttButton) {
-                webvttButton.addEventListener('click', () => {
-                    if (!downloadData || !downloadData.webvtt) {
-                        return;
-                    }
-                    const baseName = downloadData.video_identifier || 'text-graphy';
-                    triggerDownload(downloadData.webvtt, `${baseName}.vtt`, 'text/vtt');
-                });
-            }
+            const hasServerDownloads = Boolean(downloadData && downloadData.downloads);
+            if (!hasServerDownloads) {
+                const webvttButton = document.querySelector('[data-action="download-webvtt"]');
+                if (webvttButton) {
+                    webvttButton.addEventListener('click', () => {
+                        if (!downloadData || !downloadData.webvtt) {
+                            return;
+                        }
+                        const baseName = downloadData.video_identifier || 'text-graphy';
+                        triggerDownload(downloadData.webvtt, `${baseName}.vtt`, 'text/vtt');
+                    });
+                }
 
-            const linesJsonButton = document.querySelector('[data-action="download-lines-json"]');
-            if (linesJsonButton) {
-                linesJsonButton.addEventListener('click', () => {
-                    if (!downloadData || !downloadData.lines_json) {
-                        return;
-                    }
-                    const baseName = downloadData.video_identifier || 'text-graphy-lines';
-                    let payload = downloadData.lines_json;
-                    try {
-                        const parsed = JSON.parse(downloadData.lines_json);
-                        payload = JSON.stringify(parsed, null, 2);
-                    } catch (error) {
-                        // keep original payload if parsing fails
-                    }
-                    triggerDownload(payload, `${baseName}.json`, 'application/json');
-                });
+                const linesJsonButton = document.querySelector('[data-action="download-lines-json"]');
+                if (linesJsonButton) {
+                    linesJsonButton.addEventListener('click', () => {
+                        if (!downloadData || !downloadData.lines_json) {
+                            return;
+                        }
+                        const baseName = downloadData.video_identifier || 'text-graphy-lines';
+                        let payload = downloadData.lines_json;
+                        try {
+                            const parsed = JSON.parse(downloadData.lines_json);
+                            payload = JSON.stringify(parsed, null, 2);
+                        } catch (error) {
+                            // keep original payload if parsing fails
+                        }
+                        triggerDownload(payload, `${baseName}.json`, 'application/json');
+                    });
+                }
             }
         })();
     </script>

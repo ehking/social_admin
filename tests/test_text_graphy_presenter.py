@@ -74,10 +74,12 @@ def sample_plan():
     return TextGraphyPlan(video=video, lines=lines, audio_url="https://audio.example/song.mp3", total_duration=8.0)
 
 
-def test_create_text_graphy_renders_context(sample_plan):
+def test_create_text_graphy_renders_context(sample_plan, tmp_path):
     templates = DummyTemplates()
     service = StubTextGraphyService(sample_plan)
     presenter = TextGraphyPresenter(templates, service)
+    presenter.download_storage_dir = tmp_path
+    presenter.download_url_prefix = "/static/test-downloads"
 
     request = SimpleNamespace()
     user = SimpleNamespace()
@@ -110,6 +112,15 @@ def test_create_text_graphy_renders_context(sample_plan):
     assert rendered_context["token_usage"]
     assert rendered_context["token_label"] == "FakeTranslator"
     assert rendered_context["token_usage"][0].is_active is True
+    downloads = rendered_context["result"].get("downloads")
+    assert downloads
+    assert downloads["webvtt_url"].startswith("/static/test-downloads")
+    assert downloads["lines_json_url"].startswith("/static/test-downloads")
+    stored_files = {path.name: path for path in tmp_path.iterdir()}
+    assert any(name.endswith(".vtt") for name in stored_files)
+    assert any(name.endswith(".json") for name in stored_files)
+    for path in stored_files.values():
+        assert path.read_text(encoding="utf-8")
 
     assert service.calls
     call = service.calls[0]

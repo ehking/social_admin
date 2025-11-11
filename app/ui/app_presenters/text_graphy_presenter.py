@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Sequence
 
 from fastapi import Request
@@ -33,6 +36,16 @@ class TextGraphyTokenUsage:
 
 
 @dataclass(slots=True)
+class TextGraphyDownloads:
+    """Represents downloadable artifacts generated from a Text Graphy plan."""
+
+    webvtt_path: Path
+    lines_json_path: Path
+    webvtt_url: str
+    lines_json_url: str
+
+
+@dataclass(slots=True)
 class TextGraphyFormState:
     """Represents the submitted values of the Text Graphy form."""
 
@@ -43,6 +56,7 @@ class TextGraphyFormState:
     info: Optional[str] = None
     error: Optional[str] = None
     plan: Optional[TextGraphyPlan] = None
+    downloads: Optional[TextGraphyDownloads] = None
     stages: Optional[tuple[TextGraphyProcessingStage, ...]] = None
     token_label: Optional[str] = None
     token_hint: Optional[str] = None
@@ -71,6 +85,8 @@ class TextGraphyPresenter:
         self.templates = templates
         self.service = service
         self.logger = logging.getLogger("app.ui.text_graphy")
+        self.download_storage_dir = Path("app/ui/static/text_graphy")
+        self.download_url_prefix = "/static/text_graphy"
 
     def render(
         self,
@@ -84,7 +100,11 @@ class TextGraphyPresenter:
             state.token_usage = tuple(token_usage)
             if state.token_hint is None and token_usage:
                 state.token_hint = "توکن‌های فعال از بخش تنظیمات بارگذاری شده‌اند."
-        result_payload = self._plan_to_payload(state.plan) if state.plan else None
+        result_payload = (
+            self._plan_to_payload(state.plan, state.downloads)
+            if state.plan
+            else None
+        )
         context = {
             "request": request,
             "user": user,
@@ -115,6 +135,7 @@ class TextGraphyPresenter:
         error: Optional[str] = None
         info: Optional[str] = None
         plan: Optional[TextGraphyPlan] = None
+        downloads: Optional[TextGraphyDownloads] = None
         diagnostics: Optional[TextGraphyDiagnostics] = None
 
         try:
@@ -137,6 +158,16 @@ class TextGraphyPresenter:
                     audio_duration=duration_seconds,
                 )
                 info = "پیش‌نمایش تکس گرافی با موفقیت ساخته شد."
+                try:
+                    downloads = self._persist_plan_artifacts(plan)
+                except Exception as exc:  # pragma: no cover - defensive for IO errors
+                    self._log_text_graphy_error(
+                        "Failed to persist Text Graphy artifacts",
+                        error=exc,
+                        coverr_reference=coverr_reference,
+                        diagnostics=diagnostics,
+                        level=logging.ERROR,
+                    )
             except CoverrAPIError as exc:
                 diagnostics = getattr(exc, "diagnostics", diagnostics)
                 cause = exc.__cause__ or exc.__context__
@@ -200,6 +231,7 @@ class TextGraphyPresenter:
             info=info,
             error=error,
             plan=plan,
+            downloads=downloads,
             stages=diagnostics.stages if diagnostics else None,
             token_label=token_label,
             token_hint=token_hint,
@@ -215,8 +247,10 @@ class TextGraphyPresenter:
             lyrics_text=DEFAULT_LYRICS,
         )
 
-    def _plan_to_payload(self, plan: TextGraphyPlan):
-        return {
+    def _plan_to_payload(
+        self, plan: TextGraphyPlan, downloads: Optional[TextGraphyDownloads]
+    ):
+        payload = {
             "video": plan.video,
             "audio_url": plan.audio_url,
             "lines": plan.lines,
@@ -224,6 +258,49 @@ class TextGraphyPresenter:
             "webvtt": plan.as_webvtt(),
             "total_duration": plan.total_duration,
         }
+        if downloads:
+            payload["downloads"] = {
+                "webvtt_url": downloads.webvtt_url,
+                "lines_json_url": downloads.lines_json_url,
+                "webvtt_path": str(downloads.webvtt_path),
+                "lines_json_path": str(downloads.lines_json_path),
+            }
+        return payload
+
+    def _persist_plan_artifacts(self, plan: TextGraphyPlan) -> TextGraphyDownloads:
+        base_name = self._sanitize_identifier(plan.video.identifier)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        directory = self.download_storage_dir
+        directory.mkdir(parents=True, exist_ok=True)
+
+        def _unique_path(suffix: str) -> Path:
+            candidate = directory / f"{base_name}-{timestamp}{suffix}"
+            counter = 1
+            while candidate.exists():
+                candidate = directory / f"{base_name}-{timestamp}-{counter}{suffix}"
+                counter += 1
+            return candidate
+
+        webvtt_path = _unique_path(".vtt")
+        lines_json_path = _unique_path(".json")
+
+        webvtt_path.write_text(plan.as_webvtt(), encoding="utf-8")
+        lines_json_path.write_text(plan.lines_json(), encoding="utf-8")
+
+        return TextGraphyDownloads(
+            webvtt_path=webvtt_path,
+            lines_json_path=lines_json_path,
+            webvtt_url=f"{self.download_url_prefix}/{webvtt_path.name}",
+            lines_json_url=f"{self.download_url_prefix}/{lines_json_path.name}",
+        )
+
+    @staticmethod
+    def _sanitize_identifier(identifier: Optional[str]) -> str:
+        clean = (identifier or "text-graphy").strip()
+        clean = clean or "text-graphy"
+        clean = re.sub(r"[^\w-]+", "-", clean, flags=re.UNICODE)
+        clean = clean.strip("-") or "text-graphy"
+        return clean.lower()
 
     def _log_text_graphy_error(
         self,

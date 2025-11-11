@@ -252,6 +252,15 @@ class TextGraphyPresenter:
                 }
                 for stage in diagnostics.stages
             ]
+        context_segments: list[str] = []
+        location = extra_payload.get("error_origin")
+        if location:
+            context_segments.append(f"error_origin={location}")
+        coverr_ref = extra_payload.get("coverr_reference")
+        if coverr_ref:
+            context_segments.append(f"coverr_reference={coverr_ref}")
+        if context_segments:
+            message = f"{message} [{' '.join(context_segments)}]"
         self.logger.log(level, message, extra=extra_payload)
 
     @staticmethod

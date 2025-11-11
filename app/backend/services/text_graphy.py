@@ -554,6 +554,15 @@ class TextGraphyService:
             del frame
             if "caller" in locals():
                 del caller
+        context_segments: list[str] = []
+        location = payload.get("service_location")
+        if location:
+            context_segments.append(f"service_location={location}")
+        error_origin = payload.get("error_origin")
+        if error_origin:
+            context_segments.append(f"error_origin={error_origin}")
+        if context_segments:
+            message = f"{message} [{' '.join(context_segments)}]"
         LOGGER.log(level, message, extra=payload, exc_info=exc_info)
 
     def _infer_translator_label(self, translator) -> str:

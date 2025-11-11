@@ -1,4 +1,5 @@
 import json
+import logging
 import pathlib
 import sys
 
@@ -188,3 +189,36 @@ def test_exception_metadata_reports_origin():
     assert metadata["error_type"] == "ValueError"
     assert metadata["error_origin_function"] == "_trigger_error"
     assert metadata["error_origin_line"] > 0
+
+
+class ErroringResponse:
+    def __init__(self, status_code=500, text="boom"):
+        self.status_code = status_code
+        self.text = text
+
+    def json(self):  # pragma: no cover - should not be called
+        raise AssertionError("json() should not be invoked for error responses")
+
+
+class ErroringHTTPClient:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def get(self, url, timeout=10):
+        self.calls.append((url, timeout))
+        return self.response
+
+
+def test_service_logs_include_location_in_message(caplog):
+    response = ErroringResponse(status_code=404, text="missing")
+    http = ErroringHTTPClient(response)
+    service = TextGraphyService(http_client=http, translator=FakeTranslator())
+
+    with caplog.at_level(logging.ERROR, logger="app.backend.services.text_graphy"):
+        with pytest.raises(CoverrAPIError):
+            service.fetch_coverr_video("missing-video")
+
+    assert http.calls
+    error_logs = [record.message for record in caplog.records if record.levelno >= logging.ERROR]
+    assert any("service_location=" in message for message in error_logs)

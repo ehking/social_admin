@@ -1,32 +1,36 @@
 import logging
 from typing import Iterable, Optional
 
+import bcrypt
 from fastapi import HTTPException, Request, status
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from . import models
 from .services import permissions as permissions_service
 from .services.data_access import AdminUserService
-from .services import permissions as permissions_service
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-logger = logging.getLogger(__name__)
-
-logger = logging.getLogger(__name__)
-
-
-logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt."""
+
+    password_bytes = password.encode("utf-8")
+    hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+    return hashed.decode("utf-8")
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str | bytes) -> bool:
+    """Verify a password against a bcrypt hash."""
+
+    if isinstance(hashed_password, bytes):
+        hashed_bytes = hashed_password
+    elif isinstance(hashed_password, str):
+        hashed_bytes = hashed_password.encode("utf-8")
+    else:
+        logger.error("Stored password hash has unexpected type", extra={"type": type(hashed_password).__name__})
+        return False
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_bytes)
 
 
 def _ensure_role(user: models.AdminUser, required_roles: Optional[Iterable[models.AdminRole]]) -> None:

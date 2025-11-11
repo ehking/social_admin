@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
+import time
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Iterable, List, Optional, Tuple
@@ -13,6 +15,11 @@ try:  # pragma: no cover - optional dependency guard
     import requests
 except Exception:  # pragma: no cover - fallback when requests missing
     requests = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional dependency guard
+    import urllib3
+except Exception:  # pragma: no cover - fallback when urllib3 missing
+    urllib3 = None  # type: ignore[assignment]
 
 try:  # pragma: no cover - optional dependency in lightweight environments
     from deep_translator import GoogleTranslator
@@ -148,6 +155,8 @@ class TextGraphyService:
         coverr_base_url: str = DEFAULT_COVERR_BASE_URL,
         default_line_duration: float = DEFAULT_LINE_DURATION,
         request_timeout: int = 10,
+        request_retries: int = 2,
+        retry_backoff: float = 0.5,
     ) -> None:
         if http_client is None:
             if requests is None:  # pragma: no cover - handled in environments without requests
@@ -158,6 +167,8 @@ class TextGraphyService:
         self._coverr_base_url = coverr_base_url.rstrip("/")
         self._default_line_duration = max(0.5, float(default_line_duration))
         self._request_timeout = request_timeout
+        self._request_retries = max(0, int(request_retries))
+        self._retry_backoff = max(0.0, float(retry_backoff))
         self._token_label = self._infer_translator_label(self._translator)
         self._token_hint = self._build_token_hint(self._translator)
 
@@ -175,13 +186,19 @@ class TextGraphyService:
         LOGGER.debug("Fetching Coverr video metadata", extra={"video_id": video_id, "url": url})
 
         try:
-            response = self._http.get(url, timeout=self._request_timeout)
+            response = self._perform_coverr_get(url)
         except Exception as exc:  # pragma: no cover - network dependent
-            LOGGER.exception("Failed to call Coverr API", exc_info=exc)
+            self._log_service_event(
+                logging.ERROR,
+                "Failed to call Coverr API",
+                extra=self._exception_metadata(exc),
+                exc_info=True,
+            )
             raise CoverrAPIError("عدم دسترسی به سرویس Coverr. لطفاً دوباره تلاش کنید.") from exc
 
         if getattr(response, "status_code", 200) >= 400:
-            LOGGER.error(
+            self._log_service_event(
+                logging.ERROR,
                 "Coverr API returned error",
                 extra={
                     "status": getattr(response, "status_code", None),
@@ -200,12 +217,21 @@ class TextGraphyService:
         try:
             payload = response.json()
         except Exception as exc:  # pragma: no cover - network dependent
-            LOGGER.exception("Invalid JSON from Coverr API", exc_info=exc)
+            self._log_service_event(
+                logging.ERROR,
+                "Invalid JSON from Coverr API",
+                extra=self._exception_metadata(exc),
+                exc_info=True,
+            )
             raise CoverrAPIError("پاسخ نامعتبر از سرویس Coverr دریافت شد.") from exc
 
         sources = self._extract_sources(payload)
         if not sources:
-            LOGGER.warning("Coverr response missing video sources", extra={"video_id": video_id})
+            self._log_service_event(
+                logging.WARNING,
+                "Coverr response missing video sources",
+                extra={"video_id": video_id},
+            )
 
         metadata = CoverrVideoMetadata(
             identifier=str(
@@ -229,6 +255,58 @@ class TextGraphyService:
             sources=tuple(sources),
         )
         return metadata
+
+    def _perform_coverr_get(self, url: str):
+        attempt = 0
+        while True:
+            try:
+                return self._http.get(url, timeout=self._request_timeout)
+            except Exception as exc:  # pragma: no cover - network dependent
+                should_retry = attempt < self._request_retries and self._is_retryable_exception(exc)
+                if not should_retry:
+                    raise
+                attempt += 1
+                delay = min(self._retry_backoff * attempt, 5.0)
+                extra = {
+                    "attempt": attempt,
+                    "max_retries": self._request_retries,
+                    "video_url": url,
+                }
+                extra.update(self._exception_metadata(exc))
+                self._log_service_event(
+                    logging.WARNING,
+                    "Coverr API call failed, retrying",
+                    extra=extra,
+                )
+                if delay > 0:
+                    time.sleep(delay)
+
+    def _is_retryable_exception(self, exc: Exception) -> bool:
+        current: Optional[Exception] = exc
+        while current is not None:
+            if self._matches_retryable_type(current):
+                return True
+            current = current.__cause__ if current.__cause__ is not current else None
+        return False
+
+    def _matches_retryable_type(self, exc: Exception) -> bool:
+        if requests is not None:
+            try:
+                from requests import exceptions as req_exc
+            except Exception:  # pragma: no cover - defensive import guard
+                req_exc = None  # type: ignore[assignment]
+            else:
+                if isinstance(exc, (req_exc.ConnectionError, req_exc.Timeout)):  # type: ignore[arg-type]
+                    return True
+        if urllib3 is not None:
+            try:
+                from urllib3 import exceptions as urllib3_exc
+            except Exception:  # pragma: no cover - defensive import guard
+                urllib3_exc = None  # type: ignore[assignment]
+            else:
+                if isinstance(exc, urllib3_exc.ProtocolError):  # type: ignore[arg-type]
+                    return True
+        return isinstance(exc, (ConnectionError, TimeoutError, OSError))
 
     @staticmethod
     def _summarize_response_text(response: Any, limit: int = 500) -> Optional[str]:
@@ -414,9 +492,69 @@ class TextGraphyService:
         try:
             translated = self._translator.translate(text)
         except Exception as exc:  # pragma: no cover - depends on external service
-            LOGGER.exception("Translation failed", exc_info=exc)
+            self._log_service_event(
+                logging.ERROR,
+                "Translation failed",
+                extra=self._exception_metadata(exc),
+                exc_info=True,
+            )
             raise LyricsProcessingError("ترجمه متن با خطا مواجه شد. لطفاً دوباره تلاش کنید.") from exc
         return translated
+
+    @staticmethod
+    def _exception_metadata(exc: Exception) -> dict[str, object]:
+        metadata: dict[str, object] = {
+            "error_type": exc.__class__.__name__,
+            "error_message": str(exc),
+        }
+        tb = exc.__traceback__
+        last_tb = None
+        while tb:
+            last_tb = tb
+            tb = tb.tb_next
+        if last_tb is not None:
+            frame = last_tb.tb_frame
+            try:
+                module = frame.f_globals.get("__name__", frame.f_code.co_filename)
+                function = frame.f_code.co_name
+                line = last_tb.tb_lineno
+            finally:
+                del frame
+            metadata.update(
+                {
+                    "error_origin_module": module,
+                    "error_origin_function": function,
+                    "error_origin_line": line,
+                    "error_origin": f"{module}:{function}:{line}",
+                }
+            )
+        return metadata
+
+    def _log_service_event(
+        self,
+        level: int,
+        message: str,
+        *,
+        extra: Optional[dict[str, object]] = None,
+        exc_info=None,
+    ) -> None:
+        payload: dict[str, object] = dict(extra) if extra else {}
+        frame = inspect.currentframe()
+        try:
+            caller = frame.f_back if frame is not None else None
+            if caller is not None:
+                module = caller.f_globals.get("__name__", caller.f_code.co_filename)
+                function = caller.f_code.co_name
+                line = caller.f_lineno
+                payload.setdefault("service_module", module)
+                payload.setdefault("service_function", function)
+                payload.setdefault("service_line", line)
+                payload.setdefault("service_location", f"{module}:{function}:{line}")
+        finally:
+            del frame
+            if "caller" in locals():
+                del caller
+        LOGGER.log(level, message, extra=payload, exc_info=exc_info)
 
     def _infer_translator_label(self, translator) -> str:
         if translator is None:

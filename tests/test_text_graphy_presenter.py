@@ -149,3 +149,17 @@ def test_parse_duration_formats():
 
     with pytest.raises(ValueError):
         presenter._parse_duration("01:02:03:04")
+
+
+def test_presenter_exception_metadata_reports_origin():
+    presenter = TextGraphyPresenter(DummyTemplates(), StubTextGraphyService(None))
+
+    def _explode():
+        raise RuntimeError("failure")
+
+    with pytest.raises(RuntimeError) as captured:
+        _explode()
+
+    metadata = presenter._exception_metadata(captured.value)
+    assert metadata["error_origin_function"] == "_explode"
+    assert metadata["error_origin_line"] > 0

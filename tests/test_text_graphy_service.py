@@ -106,6 +106,7 @@ def test_build_plan_translates_and_spreads_timeline():
         format="mp4",
         url="https://coverr.example/autumn-sd.mp4",
     )
+    assert plan.video.sources[0].mime_type == "video/mp4"
 
     assert len(plan.lines) == 2
     assert plan.lines[0].translated == "Line one-fa"

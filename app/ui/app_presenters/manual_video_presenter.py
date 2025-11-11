@@ -138,7 +138,7 @@ SAMPLE_AI_VIDEOS: tuple[SampleAIVideo, ...] = (
         description="ویدیو هوش مصنوعی درباره معرفی یک گجت پوشیدنی آینده‌نگر.",
         duration="00:28",
         thumbnail_url="https://images.unsplash.com/photo-1523475472560-d2df97ec485c?auto=format&fit=crop&w=800&q=80",
-        video_url="https://cdn.openai.com/sora/videos/sora/product_demo.mp4",
+        video_url="https://media.w3.org/2010/05/sintel/trailer.mp4",
     ),
     SampleAIVideo(
         title="تور مجازی شهر آینده",
@@ -152,7 +152,7 @@ SAMPLE_AI_VIDEOS: tuple[SampleAIVideo, ...] = (
         description="داستانی کوتاه با روایت متنی که توسط مدل مولد ساخته شده است.",
         duration="00:21",
         thumbnail_url="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
-        video_url="https://cdn.openai.com/sora/videos/sora/short_story.mp4",
+        video_url="https://media.w3.org/2010/05/bunny/trailer.mp4",
     ),
 )
 

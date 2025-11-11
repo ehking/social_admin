@@ -10,7 +10,7 @@
             <p class="panel-description">یک حساب را انتخاب کنید و محتوا را تنظیم نمایید</p>
         </div>
     </header>
-    <form method="post" action="/scheduler" class="form-grid">
+    <form method="post" action="/scheduler" class="form-grid" data-ajax="true">
         <div class="form-field">
             <label for="account_id">حساب <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <select name="account_id" id="account_id" required>
@@ -41,6 +41,7 @@
         </div>
     </form>
 </section>
+<div id="scheduler-feedback" class="alert" role="status" hidden></div>
 <section class="panel">
     <header class="panel-header">
         <div>
@@ -48,6 +49,7 @@
             <p class="panel-description">فهرست کامل پست‌های در انتظار</p>
         </div>
     </header>
+    <div id="scheduled-posts-container">
     {% if posts %}
         <div class="table-wrapper">
             <table>
@@ -76,7 +78,7 @@
                                     {% endif %}
                                 </td>
                                 <td class="actions">
-                                    <form method="post" action="/scheduler/delete" onsubmit="return confirm('زمان‌بندی حذف شود؟');">
+                                    <form method="post" action="/scheduler/delete" data-ajax="true" data-confirm="زمان‌بندی حذف شود؟">
                                         <input type="hidden" name="post_id" value="{{ post.id }}">
                                         <button type="submit" class="btn btn-small btn-danger">حذف</button>
                                     </form>
@@ -89,5 +91,11 @@
     {% else %}
         <p class="empty">هیچ زمان‌بندی فعالی ثبت نشده است.</p>
     {% endif %}
+    </div>
 </section>
+{% endblock %}
+
+{% block extra_scripts %}
+    {{ super() }}
+    <script src="{{ url_for('static', path='js/scheduler.js') }}" defer></script>
 {% endblock %}

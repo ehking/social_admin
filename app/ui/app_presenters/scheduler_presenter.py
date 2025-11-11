@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -19,15 +19,19 @@ from app.backend.services.data_access import (
     SocialAccountService,
 )
 
-from .helpers import build_layout_context
-
-
 @dataclass(slots=True)
 class SchedulerPresenter:
     """Prepare view models and handle scheduled post flows."""
 
     templates: Jinja2Templates
     logger: logging.Logger = logging.getLogger("app.ui.scheduler")
+
+    @staticmethod
+    def _is_ajax(request: Request) -> bool:
+        """Return True when the request originates from an AJAX call."""
+
+        requested_with = request.headers.get("x-requested-with", "").lower()
+        return requested_with == "xmlhttprequest"
 
     def _load_accounts(self, db: Session) -> tuple[list[models.SocialAccount], str | None]:
         service = SocialAccountService(db)
@@ -46,6 +50,34 @@ class SchedulerPresenter:
         except DatabaseServiceError as exc:
             self.logger.error("Failed to load scheduled posts", exc_info=exc)
             return [], "بارگذاری پست‌های زمان‌بندی شده با خطا مواجه شد."
+
+    @staticmethod
+    def _serialize_posts(posts: list[models.ScheduledPost]) -> list[dict[str, object]]:
+        """Convert post models into JSON serialisable dictionaries."""
+
+        serialised: list[dict[str, object]] = []
+        for post in posts:
+            account_name = "-"
+            account_platform = ""
+            if post.account:
+                account_name = post.account.display_name
+                account_platform = post.account.platform
+            serialised.append(
+                {
+                    "id": post.id,
+                    "title": post.title,
+                    "account": account_name,
+                    "account_platform": account_platform,
+                    "scheduled_time": post.scheduled_time.isoformat() if post.scheduled_time else "",
+                    "scheduled_time_display": post.scheduled_time.strftime("%Y-%m-%d %H:%M")
+                    if post.scheduled_time
+                    else "",
+                    "status": post.status or "pending",
+                    "video_url": post.video_url or "",
+                    "content": post.content or "",
+                }
+            )
+        return serialised
 
     def render(self, request: Request, user: models.AdminUser, db: Session) -> object:
         accounts, account_error = self._load_accounts(db)
@@ -97,6 +129,15 @@ class SchedulerPresenter:
             extra_errors = [msg for msg in (account_error, post_error) if msg]
             if extra_errors:
                 context.setdefault("load_error", " ".join(dict.fromkeys(extra_errors)))
+            if self._is_ajax(request):
+                payload = {
+                    "success": False,
+                    "error": "فرمت تاریخ/زمان نامعتبر است.",
+                    "posts": self._serialize_posts(posts),
+                }
+                if extra_errors:
+                    payload["warning"] = " ".join(dict.fromkeys(extra_errors))
+                return JSONResponse(payload, status_code=400)
             return self.templates.TemplateResponse("scheduler.html", context, status_code=400)
 
         text_content = content.strip() or None if content else None
@@ -130,6 +171,15 @@ class SchedulerPresenter:
             extra_errors = [msg for msg in (account_error, post_error) if msg]
             if extra_errors:
                 context.setdefault("load_error", " ".join(dict.fromkeys(extra_errors)))
+            if self._is_ajax(request):
+                payload = {
+                    "success": False,
+                    "error": "ثبت برنامه انتشار با خطا مواجه شد.",
+                    "posts": self._serialize_posts(posts),
+                }
+                if extra_errors:
+                    payload["warning"] = " ".join(dict.fromkeys(extra_errors))
+                return JSONResponse(payload, status_code=500)
             return self.templates.TemplateResponse("scheduler.html", context, status_code=500)
 
         self.logger.info(
@@ -141,6 +191,16 @@ class SchedulerPresenter:
                 "scheduled_time": schedule_dt.isoformat(),
             },
         )
+        posts, post_error = self._load_posts(db)
+        if self._is_ajax(request):
+            payload: dict[str, object] = {
+                "success": True,
+                "message": "زمان‌بندی با موفقیت ثبت شد.",
+                "posts": self._serialize_posts(posts),
+            }
+            if post_error:
+                payload["warning"] = post_error
+            return JSONResponse(payload, status_code=201)
         return RedirectResponse(url="/scheduler", status_code=302)
 
     def delete_schedule(
@@ -173,6 +233,15 @@ class SchedulerPresenter:
             extra_errors = [msg for msg in (account_error, post_error) if msg]
             if extra_errors:
                 context.setdefault("load_error", " ".join(dict.fromkeys(extra_errors)))
+            if self._is_ajax(request):
+                payload = {
+                    "success": False,
+                    "error": "حذف پست زمان‌بندی شده با خطا مواجه شد.",
+                    "posts": self._serialize_posts(posts),
+                }
+                if extra_errors:
+                    payload["warning"] = " ".join(dict.fromkeys(extra_errors))
+                return JSONResponse(payload, status_code=500)
             return self.templates.TemplateResponse("scheduler.html", context, status_code=500)
 
         if deleted:
@@ -185,4 +254,14 @@ class SchedulerPresenter:
                 "Attempted to delete non-existent scheduled post",
                 extra={"user_id": user.id, "post_id": post_id},
             )
+        posts, post_error = self._load_posts(db)
+        if self._is_ajax(request):
+            payload: dict[str, object] = {
+                "success": True,
+                "message": "پست زمان‌بندی شده حذف شد.",
+                "posts": self._serialize_posts(posts),
+            }
+            if post_error:
+                payload["warning"] = post_error
+            return JSONResponse(payload, status_code=200)
         return RedirectResponse(url="/scheduler", status_code=302)

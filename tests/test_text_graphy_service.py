@@ -10,6 +10,7 @@ from app.backend.services.text_graphy import (
     CoverrVideoSource,
     LyricsProcessingError,
     TextGraphyService,
+    TextGraphyDiagnostics,
 )
 
 
@@ -88,6 +89,18 @@ def test_build_plan_translates_and_spreads_timeline():
     assert webvtt.startswith("WEBVTT")
     exported = json.loads(plan.lines_json())
     assert exported[0]["translated"] == "Line one-fa"
+
+    plan_with_diag, diagnostics = service.build_plan_with_diagnostics(
+        coverr_reference="autumn-sun",
+        lyrics_text="Line one\nLine two",
+        audio_url="https://audio.example/song.mp3",
+        audio_duration=120,
+    )
+    assert isinstance(diagnostics, TextGraphyDiagnostics)
+    assert diagnostics.stages
+    assert diagnostics.stages[0].status == "completed"
+    assert diagnostics.token_label.startswith("FakeTranslator")
+    assert plan_with_diag.total_duration == plan.total_duration
 
 
 def test_build_plan_raises_for_empty_lyrics():

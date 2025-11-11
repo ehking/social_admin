@@ -6,7 +6,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
 
 try:  # pragma: no cover - optional dependency guard
@@ -25,6 +25,10 @@ LOGGER = logging.getLogger(__name__)
 
 class TextGraphyServiceError(RuntimeError):
     """Base class for Text Graphy related failures."""
+
+    def __init__(self, message: str = "", *, diagnostics=None) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics
 
 
 class CoverrAPIError(TextGraphyServiceError):
@@ -110,6 +114,25 @@ class TextGraphyPlan:
         return json.dumps([line.to_json() for line in self.lines], ensure_ascii=False)
 
 
+@dataclass(slots=True)
+class TextGraphyProcessingStage:
+    """Represents a single step of the plan generation pipeline."""
+
+    key: str
+    title: str
+    status: str = "pending"
+    detail: Optional[str] = None
+
+
+@dataclass(slots=True)
+class TextGraphyDiagnostics:
+    """Container for exposing diagnostic information to the UI."""
+
+    stages: Tuple[TextGraphyProcessingStage, ...]
+    token_label: str
+    token_hint: Optional[str] = None
+
+
 DEFAULT_COVERR_BASE_URL = "https://api.coverr.co"
 DEFAULT_LINE_DURATION = 4.0
 
@@ -135,6 +158,8 @@ class TextGraphyService:
         self._coverr_base_url = coverr_base_url.rstrip("/")
         self._default_line_duration = max(0.5, float(default_line_duration))
         self._request_timeout = request_timeout
+        self._token_label = self._infer_translator_label(self._translator)
+        self._token_hint = self._build_token_hint(self._translator)
 
     @staticmethod
     def _build_translator() -> GoogleTranslator:
@@ -232,15 +257,91 @@ class TextGraphyService:
         audio_url: Optional[str],
         audio_duration: Optional[float] = None,
     ) -> TextGraphyPlan:
-        video = self.fetch_coverr_video(coverr_reference)
-        lines = self._build_lines(lyrics_text, audio_duration)
+        plan, _ = self.build_plan_with_diagnostics(
+            coverr_reference=coverr_reference,
+            lyrics_text=lyrics_text,
+            audio_url=audio_url,
+            audio_duration=audio_duration,
+        )
+        return plan
+
+    def build_plan_with_diagnostics(
+        self,
+        *,
+        coverr_reference: str,
+        lyrics_text: str,
+        audio_url: Optional[str],
+        audio_duration: Optional[float] = None,
+    ) -> Tuple[TextGraphyPlan, TextGraphyDiagnostics]:
+        stages: List[TextGraphyProcessingStage] = [
+            TextGraphyProcessingStage(
+                key="coverr_fetch",
+                title="دریافت ویدیو از Coverr",
+            ),
+            TextGraphyProcessingStage(
+                key="lyrics_processing",
+                title="پردازش و ترجمه متن ترانه",
+            ),
+            TextGraphyProcessingStage(
+                key="timeline_assembly",
+                title="مونتاژ زیرنویس و آماده‌سازی پیش‌نمایش",
+            ),
+        ]
+
+        video: Optional[CoverrVideoMetadata] = None
+        lines: List[TextGraphyLine] = []
+
+        try:
+            stages[0].status = "processing"
+            video = self.fetch_coverr_video(coverr_reference)
+            stages[0].status = "completed"
+            stages[0].detail = video.title
+        except TextGraphyServiceError as exc:
+            stages[0].status = "error"
+            stages[0].detail = str(exc)
+            diagnostics = self._finalise_diagnostics(stages)
+            exc.diagnostics = diagnostics
+            raise
+        except Exception as exc:  # pragma: no cover - defensive branch
+            stages[0].status = "error"
+            stages[0].detail = "خطای غیرمنتظره هنگام دریافت ویدیو"
+            diagnostics = self._finalise_diagnostics(stages)
+            raise TextGraphyServiceError(
+                "خطای غیرمنتظره هنگام دریافت ویدیو Coverr.", diagnostics=diagnostics
+            ) from exc
+
+        try:
+            stages[1].status = "processing"
+            lines = self._build_lines(lyrics_text, audio_duration)
+            stages[1].status = "completed"
+            stages[1].detail = f"{len(lines)} خط پردازش شد"
+        except TextGraphyServiceError as exc:
+            stages[1].status = "error"
+            stages[1].detail = str(exc)
+            diagnostics = self._finalise_diagnostics(stages)
+            exc.diagnostics = diagnostics
+            raise
+        except Exception as exc:  # pragma: no cover - defensive branch
+            stages[1].status = "error"
+            stages[1].detail = "خطای غیرمنتظره هنگام پردازش متن"
+            diagnostics = self._finalise_diagnostics(stages)
+            raise TextGraphyServiceError(
+                "خطای غیرمنتظره هنگام پردازش متن ترانه.", diagnostics=diagnostics
+            ) from exc
+
+        stages[2].status = "processing"
         total_duration = lines[-1].end if lines else 0.0
-        return TextGraphyPlan(
+        plan = TextGraphyPlan(
             video=video,
             lines=tuple(lines),
             audio_url=audio_url,
             total_duration=total_duration,
         )
+        stages[2].status = "completed"
+        stages[2].detail = f"مدت کل: {total_duration:.1f} ثانیه"
+
+        diagnostics = self._finalise_diagnostics(stages)
+        return plan, diagnostics
 
     def _build_lines(
         self,
@@ -293,6 +394,46 @@ class TextGraphyService:
             LOGGER.exception("Translation failed", exc_info=exc)
             raise LyricsProcessingError("ترجمه متن با خطا مواجه شد. لطفاً دوباره تلاش کنید.") from exc
         return translated
+
+    def _infer_translator_label(self, translator) -> str:
+        if translator is None:
+            return "مترجم خودکار فعال نیست"
+        provider = getattr(translator, "provider", None) or getattr(translator, "source", None)
+        provider_label = f" – {provider}" if provider else ""
+        return f"{translator.__class__.__name__}{provider_label}"
+
+    def _build_token_hint(self, translator) -> Optional[str]:
+        if translator is None:
+            return None
+        token = getattr(translator, "api_key", None) or getattr(translator, "token", None)
+        if token:
+            masked = self._mask_token(str(token))
+            return f"توکن مترجم: {masked}"
+        return "بدون نیاز به توکن اختصاصی (Deep Translator)"
+
+    @staticmethod
+    def _mask_token(token: str) -> str:
+        if len(token) <= 6:
+            return "*" * len(token)
+        return f"{token[:3]}***{token[-3:]}"
+
+    def _finalise_diagnostics(
+        self, stages: List[TextGraphyProcessingStage]
+    ) -> TextGraphyDiagnostics:
+        frozen = tuple(
+            TextGraphyProcessingStage(
+                key=stage.key,
+                title=stage.title,
+                status=stage.status,
+                detail=stage.detail,
+            )
+            for stage in stages
+        )
+        return TextGraphyDiagnostics(
+            stages=frozen,
+            token_label=self._token_label,
+            token_hint=self._token_hint,
+        )
 
 
 def _format_timestamp(seconds: float) -> str:

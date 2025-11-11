@@ -9,10 +9,15 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 from app.backend.services.text_graphy import (
     CoverrVideoMetadata,
     CoverrVideoSource,
+    TextGraphyDiagnostics,
     TextGraphyLine,
     TextGraphyPlan,
+    TextGraphyProcessingStage,
 )
-from app.ui.app_presenters.text_graphy_presenter import TextGraphyPresenter
+from app.ui.app_presenters.text_graphy_presenter import (
+    TextGraphyPresenter,
+    TextGraphyTokenUsage,
+)
 
 
 class DummyTemplates:
@@ -29,9 +34,21 @@ class StubTextGraphyService:
         self.plan = plan
         self.calls = []
 
-    def build_plan(self, **kwargs):
+    def build_plan_with_diagnostics(self, **kwargs):
         self.calls.append(kwargs)
-        return self.plan
+        diagnostics = TextGraphyDiagnostics(
+            stages=(
+                TextGraphyProcessingStage(
+                    key="coverr_fetch",
+                    title="Fetch",
+                    status="completed",
+                    detail="Sample Video",
+                ),
+            ),
+            token_label="FakeTranslator",
+            token_hint="Token hint",
+        )
+        return self.plan, diagnostics
 
 
 @pytest.fixture
@@ -63,6 +80,14 @@ def test_create_text_graphy_renders_context(sample_plan):
 
     request = SimpleNamespace()
     user = SimpleNamespace()
+    tokens = [
+        TextGraphyTokenUsage(
+            name="Coverr",
+            key="coverr_api",
+            endpoint_url="https://api.coverr.test",
+            is_active=True,
+        )
+    ]
 
     context = presenter.create_text_graphy(
         request=request,
@@ -71,6 +96,7 @@ def test_create_text_graphy_renders_context(sample_plan):
         music_url="https://audio.example/song.mp3",
         music_duration="01:20",
         lyrics_text="Line 1\nLine 2",
+        token_usage=tokens,
     )
 
     assert templates.calls
@@ -79,6 +105,10 @@ def test_create_text_graphy_renders_context(sample_plan):
     assert rendered_context["info"] == "پیش‌نمایش تکس گرافی با موفقیت ساخته شد."
     assert rendered_context["result"]["video"].identifier == "sample"
     assert "lines_json" in rendered_context["result"]
+    assert rendered_context["stages"]
+    assert rendered_context["token_usage"]
+    assert rendered_context["token_label"] == "FakeTranslator"
+    assert rendered_context["token_usage"][0].is_active is True
 
     assert service.calls
     call = service.calls[0]

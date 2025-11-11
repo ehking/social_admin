@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
@@ -13,11 +13,23 @@ from app.backend.services.text_graphy import (
     CoverrAPIError,
     LyricsProcessingError,
     TextGraphyPlan,
+    TextGraphyDiagnostics,
+    TextGraphyProcessingStage,
     TextGraphyService,
     TextGraphyServiceError,
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class TextGraphyTokenUsage:
+    """Represents a relevant service token for the Text Graphy flow."""
+
+    name: str
+    key: str
+    endpoint_url: Optional[str] = None
+    is_active: bool = False
 
 
 @dataclass(slots=True)
@@ -31,6 +43,10 @@ class TextGraphyFormState:
     info: Optional[str] = None
     error: Optional[str] = None
     plan: Optional[TextGraphyPlan] = None
+    stages: Optional[tuple[TextGraphyProcessingStage, ...]] = None
+    token_label: Optional[str] = None
+    token_hint: Optional[str] = None
+    token_usage: Optional[tuple[TextGraphyTokenUsage, ...]] = None
 
 
 DEFAULT_LYRICS = (
@@ -61,8 +77,13 @@ class TextGraphyPresenter:
         request: Request,
         user,
         form_state: Optional[TextGraphyFormState] = None,
+        token_usage: Optional[Sequence[TextGraphyTokenUsage]] = None,
     ):
         state = form_state or self._default_state()
+        if token_usage is not None:
+            state.token_usage = tuple(token_usage)
+            if state.token_hint is None and token_usage:
+                state.token_hint = "توکن‌های فعال از بخش تنظیمات بارگذاری شده‌اند."
         result_payload = self._plan_to_payload(state.plan) if state.plan else None
         context = {
             "request": request,
@@ -72,6 +93,10 @@ class TextGraphyPresenter:
             "result": result_payload,
             "info": state.info,
             "error": state.error,
+            "stages": state.stages,
+            "token_label": state.token_label,
+            "token_hint": state.token_hint,
+            "token_usage": state.token_usage,
         }
         return self.templates.TemplateResponse("text_graphy.html", context)
 
@@ -84,11 +109,13 @@ class TextGraphyPresenter:
         music_url: Optional[str],
         music_duration: Optional[str],
         lyrics_text: str,
+        token_usage: Optional[Sequence[TextGraphyTokenUsage]] = None,
     ):
         duration_seconds: Optional[float] = None
         error: Optional[str] = None
         info: Optional[str] = None
         plan: Optional[TextGraphyPlan] = None
+        diagnostics: Optional[TextGraphyDiagnostics] = None
 
         try:
             duration_seconds = self._parse_duration(music_duration)
@@ -97,7 +124,7 @@ class TextGraphyPresenter:
 
         if error is None:
             try:
-                plan = self.service.build_plan(
+                plan, diagnostics = self.service.build_plan_with_diagnostics(
                     coverr_reference=coverr_reference,
                     lyrics_text=lyrics_text,
                     audio_url=music_url if music_url else None,
@@ -105,14 +132,22 @@ class TextGraphyPresenter:
                 )
                 info = "پیش‌نمایش تکس گرافی با موفقیت ساخته شد."
             except CoverrAPIError as exc:
+                diagnostics = getattr(exc, "diagnostics", diagnostics)
                 error = str(exc)
             except LyricsProcessingError as exc:
+                diagnostics = getattr(exc, "diagnostics", diagnostics)
                 error = str(exc)
             except TextGraphyServiceError as exc:
+                diagnostics = getattr(exc, "diagnostics", diagnostics)
                 error = str(exc)
             except Exception:  # pragma: no cover - defensive branch
                 self.logger.exception("Unexpected error while building Text Graphy plan")
                 error = "خطای غیرمنتظره هنگام ساخت تکس گرافی رخ داد."
+
+        token_label = diagnostics.token_label if diagnostics else None
+        token_hint = diagnostics.token_hint if diagnostics else None
+        if token_hint is None and token_usage:
+            token_hint = "توکن‌های فعال از بخش تنظیمات بارگذاری شده‌اند."
 
         state = TextGraphyFormState(
             coverr_reference=coverr_reference,
@@ -122,8 +157,12 @@ class TextGraphyPresenter:
             info=info,
             error=error,
             plan=plan,
+            stages=diagnostics.stages if diagnostics else None,
+            token_label=token_label,
+            token_hint=token_hint,
+            token_usage=tuple(token_usage) if token_usage else None,
         )
-        return self.render(request, user, state)
+        return self.render(request, user, state, token_usage=token_usage)
 
     def _default_state(self) -> TextGraphyFormState:
         return TextGraphyFormState(

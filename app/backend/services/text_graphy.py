@@ -182,37 +182,82 @@ class TextGraphyService:
         """Retrieve metadata for the requested Coverr video."""
 
         video_id = self._extract_video_id(reference)
-        url = f"{self._coverr_base_url}/videos/{video_id}"
-        LOGGER.debug("Fetching Coverr video metadata", extra={"video_id": video_id, "url": url})
+        candidate_urls = self._candidate_coverr_urls(video_id)
 
-        try:
-            response = self._perform_coverr_get(url)
-        except Exception as exc:  # pragma: no cover - network dependent
-            self._log_service_event(
-                logging.ERROR,
-                "Failed to call Coverr API",
-                extra=self._exception_metadata(exc),
-                exc_info=True,
-            )
-            raise CoverrAPIError("عدم دسترسی به سرویس Coverr. لطفاً دوباره تلاش کنید.") from exc
+        response = None
+        response_url = None
+        error_responses: list[tuple[str, Any]] = []
+        last_exception: Optional[Exception] = None
 
-        if getattr(response, "status_code", 200) >= 400:
+        for url in candidate_urls:
+            LOGGER.debug("Fetching Coverr video metadata", extra={"video_id": video_id, "url": url})
+            try:
+                candidate_response = self._perform_coverr_get(url)
+            except Exception as exc:  # pragma: no cover - network dependent
+                last_exception = exc
+                break
+
+            if getattr(candidate_response, "status_code", 200) >= 400:
+                error_responses.append((url, candidate_response))
+                continue
+
+            response = candidate_response
+            response_url = url
+            break
+
+        if response is None:
+            if last_exception is not None and not error_responses:
+                self._log_service_event(
+                    logging.ERROR,
+                    "Failed to call Coverr API",
+                    extra=self._exception_metadata(last_exception),
+                    exc_info=True,
+                )
+                raise CoverrAPIError("عدم دسترسی به سرویس Coverr. لطفاً دوباره تلاش کنید.") from last_exception
+
+            error_url, error_response = error_responses[-1] if error_responses else (candidate_urls[-1], None)
+            extra = {
+                "status": getattr(error_response, "status_code", None) if error_response else None,
+                "video_id": video_id,
+                "request": {
+                    "method": "GET",
+                    "url": error_url,
+                    "params": None,
+                    "timeout": self._request_timeout,
+                },
+                "response_text": self._summarize_response_text(error_response) if error_response else None,
+            }
+            if len(error_responses) > 1:
+                extra["attempts"] = [
+                    {
+                        "url": attempted_url,
+                        "status": getattr(attempted_response, "status_code", None),
+                    }
+                    for attempted_url, attempted_response in error_responses
+                ]
             self._log_service_event(
                 logging.ERROR,
                 "Coverr API returned error",
-                extra={
-                    "status": getattr(response, "status_code", None),
-                    "video_id": video_id,
-                    "request": {
-                        "method": "GET",
-                        "url": url,
-                        "params": None,
-                        "timeout": self._request_timeout,
-                    },
-                    "response_text": self._summarize_response_text(response),
-                },
+                extra=extra,
             )
             raise CoverrAPIError("شناسه ویدیو Coverr معتبر نیست یا قابل بازیابی نمی‌باشد.")
+
+        if response_url and response_url != candidate_urls[0]:
+            self._log_service_event(
+                logging.INFO,
+                "Coverr API fallback succeeded",
+                extra={
+                    "video_id": video_id,
+                    "selected_url": response_url,
+                    "attempts": [
+                        {
+                            "url": attempted_url,
+                            "status": getattr(attempted_response, "status_code", None),
+                        }
+                        for attempted_url, attempted_response in error_responses
+                    ],
+                },
+            )
 
         try:
             payload = response.json()
@@ -225,6 +270,7 @@ class TextGraphyService:
             )
             raise CoverrAPIError("پاسخ نامعتبر از سرویس Coverr دریافت شد.") from exc
 
+        payload = self._normalise_coverr_payload(payload, video_id)
         sources = self._extract_sources(payload)
         if not sources:
             self._log_service_event(
@@ -255,6 +301,78 @@ class TextGraphyService:
             sources=tuple(sources),
         )
         return metadata
+
+    def _candidate_coverr_urls(self, video_id: str) -> List[str]:
+        primary = f"{self._coverr_base_url}/videos/{video_id}"
+        urls = [primary]
+
+        default_base = DEFAULT_COVERR_BASE_URL.rstrip("/").lower()
+        current_base = self._coverr_base_url.rstrip("/").lower()
+        if current_base == default_base:
+            fallback_bases = [
+                "https://coverr.co/api/v3",
+                "https://coverr.co/api",
+            ]
+            fallback_templates = (
+                "{base}/videos/{video_id}",
+                "{base}/videos?slug={video_id}",
+                "{base}/videos/slug/{video_id}",
+                "{base}/video/{video_id}",
+                "{base}/video?slug={video_id}",
+            )
+            for base in fallback_bases:
+                for template in fallback_templates:
+                    urls.append(template.format(base=base, video_id=video_id))
+
+        # Ensure deterministic order without duplicates
+        deduped = []
+        seen = set()
+        for url in urls:
+            if url not in seen:
+                deduped.append(url)
+                seen.add(url)
+        return deduped
+
+    @staticmethod
+    def _normalise_coverr_payload(payload: Any, video_id: str) -> dict:
+        if isinstance(payload, dict):
+            if "videos" in payload and isinstance(payload["videos"], list):
+                return TextGraphyService._select_coverr_candidate(payload["videos"], video_id)
+            if "items" in payload and isinstance(payload["items"], list):
+                return TextGraphyService._select_coverr_candidate(payload["items"], video_id)
+            if "data" in payload and isinstance(payload["data"], list):
+                return TextGraphyService._select_coverr_candidate(payload["data"], video_id)
+            if (
+                "data" in payload
+                and isinstance(payload["data"], dict)
+                and not any(key in payload for key in ("id", "slug", "videoId", "title", "name"))
+            ):
+                return TextGraphyService._normalise_coverr_payload(payload["data"], video_id)
+            if "video" in payload and isinstance(payload["video"], dict) and not any(
+                key in payload for key in ("id", "slug", "videoId", "title", "name")
+            ):
+                return payload["video"]
+            return payload
+        if isinstance(payload, list):
+            return TextGraphyService._select_coverr_candidate(payload, video_id)
+        return {}
+
+    @staticmethod
+    def _select_coverr_candidate(candidates: Iterable[Any], video_id: str) -> dict:
+        matches = []
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            matches.append(candidate)
+            identifier = str(
+                candidate.get("id")
+                or candidate.get("slug")
+                or candidate.get("videoId")
+                or candidate.get("video_id")
+            )
+            if identifier and identifier == video_id:
+                return candidate
+        return matches[0] if matches else {}
 
     def _perform_coverr_get(self, url: str):
         attempt = 0

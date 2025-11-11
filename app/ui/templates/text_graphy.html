@@ -198,7 +198,22 @@
     <details class="text-graphy-webvtt">
         <summary>دریافت زیرنویس WEBVTT</summary>
         <pre>{{ result.webvtt }}</pre>
+        <div class="text-graphy-download-actions">
+            <button type="button" class="btn btn-secondary btn-small" data-action="download-webvtt">
+                دانلود فایل WEBVTT
+            </button>
+            <button type="button" class="btn btn-secondary btn-small" data-action="download-lines-json">
+                دانلود ساختار خطوط (JSON)
+            </button>
+        </div>
     </details>
+    <script type="application/json" id="text-graphy-downloads-data">
+        {{ {
+            'webvtt': result.webvtt,
+            'lines_json': result.lines_json,
+            'video_identifier': result.video.identifier
+        } | tojson }}
+    </script>
 </section>
 {% endif %}
 {% endblock %}
@@ -301,6 +316,65 @@
                     if (video && !video.paused) {
                         video.pause();
                     }
+                });
+            }
+
+            const downloadDataElement = document.getElementById('text-graphy-downloads-data');
+            let downloadData = null;
+            if (downloadDataElement) {
+                try {
+                    downloadData = JSON.parse(downloadDataElement.textContent || '{}');
+                } catch (error) {
+                    console.warn('Failed to parse download data for Text Graphy', error);
+                    downloadData = null;
+                }
+            }
+
+            const triggerDownload = (content, filename, mimeType = 'text/plain') => {
+                if (!content) {
+                    return;
+                }
+                try {
+                    const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+                    const url = URL.createObjectURL(blob);
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = filename || 'text-graphy.txt';
+                    document.body.appendChild(anchor);
+                    anchor.click();
+                    document.body.removeChild(anchor);
+                    setTimeout(() => URL.revokeObjectURL(url), 2000);
+                } catch (error) {
+                    console.warn('Unable to download file locally', error);
+                }
+            };
+
+            const webvttButton = document.querySelector('[data-action="download-webvtt"]');
+            if (webvttButton) {
+                webvttButton.addEventListener('click', () => {
+                    if (!downloadData || !downloadData.webvtt) {
+                        return;
+                    }
+                    const baseName = downloadData.video_identifier || 'text-graphy';
+                    triggerDownload(downloadData.webvtt, `${baseName}.vtt`, 'text/vtt');
+                });
+            }
+
+            const linesJsonButton = document.querySelector('[data-action="download-lines-json"]');
+            if (linesJsonButton) {
+                linesJsonButton.addEventListener('click', () => {
+                    if (!downloadData || !downloadData.lines_json) {
+                        return;
+                    }
+                    const baseName = downloadData.video_identifier || 'text-graphy-lines';
+                    let payload = downloadData.lines_json;
+                    try {
+                        const parsed = JSON.parse(downloadData.lines_json);
+                        payload = JSON.stringify(parsed, null, 2);
+                    } catch (error) {
+                        // keep original payload if parsing fails
+                    }
+                    triggerDownload(payload, `${baseName}.json`, 'application/json');
                 });
             }
         })();

@@ -119,8 +119,13 @@ class TextGraphyPresenter:
 
         try:
             duration_seconds = self._parse_duration(music_duration)
-        except ValueError:
+        except ValueError as exc:
             error = "فرمت مدت زمان موزیک معتبر نیست. از قالب mm:ss یا ثانیه استفاده کنید."
+            self._log_text_graphy_error(
+                "Invalid audio duration provided for Text Graphy submission",
+                error=exc,
+                coverr_reference=coverr_reference,
+            )
 
         if error is None:
             try:
@@ -133,15 +138,48 @@ class TextGraphyPresenter:
                 info = "پیش‌نمایش تکس گرافی با موفقیت ساخته شد."
             except CoverrAPIError as exc:
                 diagnostics = getattr(exc, "diagnostics", diagnostics)
+                cause = exc.__cause__ or exc.__context__
+                extra: dict[str, object] = {}
+                if cause:
+                    extra["service_cause"] = f"{cause.__class__.__name__}: {cause}"
+                self._log_text_graphy_error(
+                    "Coverr video lookup failed",
+                    error=exc,
+                    coverr_reference=coverr_reference,
+                    diagnostics=diagnostics,
+                    source_stage="menu",
+                    **extra,
+                )
                 error = str(exc)
             except LyricsProcessingError as exc:
                 diagnostics = getattr(exc, "diagnostics", diagnostics)
+                self._log_text_graphy_error(
+                    "Lyrics processing failed",
+                    error=exc,
+                    coverr_reference=coverr_reference,
+                    diagnostics=diagnostics,
+                )
                 error = str(exc)
             except TextGraphyServiceError as exc:
                 diagnostics = getattr(exc, "diagnostics", diagnostics)
+                self._log_text_graphy_error(
+                    "Text Graphy service failed",
+                    error=exc,
+                    coverr_reference=coverr_reference,
+                    diagnostics=diagnostics,
+                )
                 error = str(exc)
-            except Exception:  # pragma: no cover - defensive branch
-                self.logger.exception("Unexpected error while building Text Graphy plan")
+            except Exception as exc:  # pragma: no cover - defensive branch
+                self._log_text_graphy_error(
+                    "Unexpected error while building Text Graphy plan",
+                    error=exc,
+                    coverr_reference=coverr_reference,
+                    diagnostics=diagnostics,
+                )
+                self.logger.exception(
+                    "Unexpected error while building Text Graphy plan",
+                    extra={"stage": "logs"},
+                )
                 error = "خطای غیرمنتظره هنگام ساخت تکس گرافی رخ داد."
 
         token_label = diagnostics.token_label if diagnostics else None
@@ -181,6 +219,33 @@ class TextGraphyPresenter:
             "webvtt": plan.as_webvtt(),
             "total_duration": plan.total_duration,
         }
+
+    def _log_text_graphy_error(
+        self,
+        message: str,
+        *,
+        error: Exception,
+        coverr_reference: Optional[str] = None,
+        diagnostics: Optional[TextGraphyDiagnostics] = None,
+        **extra: object,
+    ) -> None:
+        extra_payload: dict[str, object] = {"stage": "logs"}
+        if extra:
+            extra_payload.update(extra)
+        extra_payload["error"] = str(error)
+        extra_payload["error_type"] = error.__class__.__name__
+        if coverr_reference:
+            extra_payload["coverr_reference"] = coverr_reference
+        if diagnostics and diagnostics.stages:
+            extra_payload["diagnostics"] = [
+                {
+                    "key": stage.key,
+                    "status": stage.status,
+                    "detail": stage.detail,
+                }
+                for stage in diagnostics.stages
+            ]
+        self.logger.warning(message, extra=extra_payload)
 
     def _parse_duration(self, raw: Optional[str]) -> Optional[float]:
         if raw is None:

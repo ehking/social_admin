@@ -287,6 +287,7 @@ a {
     display: flex;
     gap: 10px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .btn-copy {
@@ -514,6 +515,16 @@ tr:last-child td {
     flex-direction: column;
     gap: 6px;
     max-width: 220px;
+}
+
+.job-preview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.job-preview-actions .btn {
+    flex: 1 0 auto;
 }
 
 .job-preview-video {
@@ -1291,6 +1302,8 @@ textarea {
 .media-card-actions {
     display: flex;
     justify-content: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
     margin-top: auto;
 }
 

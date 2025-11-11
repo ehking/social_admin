@@ -71,6 +71,14 @@
                         <a class="btn btn-secondary btn-small" href="{{ video.video_url }}" target="_blank" rel="noopener">
                             مشاهده ویدیو
                         </a>
+                        <a
+                            class="btn btn-small"
+                            href="{{ video.video_url }}"
+                            download
+                            rel="noopener"
+                        >
+                            دانلود ویدیو
+                        </a>
                         <button
                             class="btn btn-small btn-copy"
                             type="button"
@@ -159,6 +167,23 @@
                                             src="{{ job.local_preview_url or job.media_preview_url }}"
                                             class="job-preview-video"
                                         ></video>
+                                        <div class="job-preview-actions">
+                                            <a
+                                                class="btn btn-secondary btn-small"
+                                                href="{{ job.local_preview_url or job.media_preview_url }}"
+                                                download
+                                            >
+                                                دانلود ویدیو
+                                            </a>
+                                            <a
+                                                class="btn btn-small"
+                                                href="{{ job.local_preview_url or job.media_preview_url }}"
+                                                target="_blank"
+                                                rel="noopener"
+                                            >
+                                                مشاهده در پنجره جدید
+                                            </a>
+                                        </div>
                                         {% if job.local_preview_path %}
                                             <small class="job-preview-path">مسیر ذخیره سازی: {{ job.local_preview_path }}</small>
                                         {% endif %}

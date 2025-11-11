@@ -84,7 +84,8 @@
                         </dl>
                         {% if item.preview_url %}
                         <div class="media-card-actions">
-                            <a class="btn btn-secondary btn-small" href="{{ item.preview_url }}" target="_blank" rel="noopener">نمایش یا دانلود</a>
+                            <a class="btn btn-secondary btn-small" href="{{ item.preview_url }}" download>دانلود</a>
+                            <a class="btn btn-small" href="{{ item.preview_url }}" target="_blank" rel="noopener">مشاهده</a>
                         </div>
                         {% endif %}
                     </div>

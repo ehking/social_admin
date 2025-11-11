@@ -127,6 +127,15 @@
                     <span class="text-graphy-overlay-text"></span>
                 </div>
             </div>
+            {% if result.video.sources %}
+                <a class="btn btn-secondary btn-small text-graphy-download-button" href="{{ result.video.sources[0].url }}" download>
+                    دانلود ویدیو
+                </a>
+            {% elif result.video.preview_url %}
+                <a class="btn btn-secondary btn-small text-graphy-download-button" href="{{ result.video.preview_url }}" target="_blank" rel="noopener">
+                    نمایش در Coverr
+                </a>
+            {% endif %}
         </div>
         <aside class="text-graphy-meta">
             <dl>

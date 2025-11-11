@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
@@ -27,21 +27,25 @@ class LogFileSummary:
 
 @dataclass(slots=True)
 class LogsPresenter:
-    """Load JSON log files from disk and present them in the UI."""
+    """Load structured log files from disk and present them in the UI."""
 
     templates: Jinja2Templates
     log_directory: Path = field(default_factory=lambda: Path("logs") / "jobs")
+    api_log_path: Path = field(default_factory=lambda: Path("logs") / "api_requests.log")
     max_files: int = 10
     max_entries_per_file: int = 50
+    max_api_entries: int = 200
 
     def render(self, request: Request, user: Any, db: Session) -> Any:
         log_files = self._collect_log_files()
+        api_entries = self._load_api_entries()
         context: Dict[str, Any] = build_layout_context(
             request=request,
             user=user,
             db=db,
             active_page="logs",
             log_files=log_files,
+            api_entries=api_entries,
         )
         return self.templates.TemplateResponse("logs.html", context)
 
@@ -127,6 +131,83 @@ class LogsPresenter:
             "message": message,
             "details": details,
         }
+
+    def _load_api_entries(self) -> List[Dict[str, Any]]:
+        path = self.api_log_path
+        if not path.exists():
+            return []
+
+        lines: deque[str] = deque(maxlen=self.max_api_entries)
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                for raw_line in handle:
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+                    lines.append(line)
+        except OSError as exc:
+            return [
+                {
+                    "level": "ERROR",
+                    "badge_class": "danger",
+                    "timestamp": "",
+                    "message": "خطا در خواندن لاگ درخواست‌های API",
+                    "details": str(exc),
+                }
+            ]
+
+        entries: List[Dict[str, Any]] = []
+        for line in reversed(list(lines)):
+            entry = self._parse_api_log_line(line)
+            entries.append(entry)
+        return entries
+
+    def _parse_api_log_line(self, line: str) -> Dict[str, Any]:
+        parts = line.split("\t", 3)
+        if len(parts) < 4:
+            return {
+                "level": "INFO",
+                "badge_class": "info",
+                "timestamp": "",
+                "message": line,
+                "details": "",
+            }
+
+        timestamp, level, logger_name, message = parts
+        level = level.upper()
+        badge_class = self._level_to_badge(level)
+        event, details_dict = self._parse_structured_message(message)
+        details_dict["logger"] = logger_name
+        details = json.dumps(details_dict, ensure_ascii=False, indent=2) if details_dict else ""
+
+        return {
+            "level": level,
+            "badge_class": badge_class,
+            "timestamp": timestamp,
+            "message": event,
+            "details": details,
+        }
+
+    @staticmethod
+    def _parse_structured_message(message: str) -> Tuple[str, Dict[str, Any]]:
+        parts = message.split("\t")
+        if not parts:
+            return message, {}
+
+        event = parts[0]
+        details: Dict[str, Any] = {}
+        extras: List[str] = []
+        for token in parts[1:]:
+            if "=" in token:
+                key, value = token.split("=", 1)
+                details[key] = value
+            elif token:
+                extras.append(token)
+
+        if extras:
+            details["extra"] = ", ".join(extras)
+
+        return event, details
 
     @staticmethod
     def _level_to_badge(level: str) -> str:

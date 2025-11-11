@@ -903,6 +903,65 @@ textarea {
     font-size: 12px;
 }
 
+.log-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.log-tabs-nav {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.log-tab-button {
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--muted);
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.log-tab-button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.log-tab-button.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 10px 24px rgba(99, 102, 241, 0.25);
+}
+
+.log-tab-button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.log-tab-panels {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--card-bg);
+    padding: 24px;
+}
+
+.log-tab-panel {
+    display: none;
+}
+
+.log-tab-panel.is-active {
+    display: block;
+}
+
+.log-tab-panel .empty {
+    margin: 0;
+}
+
 @media (max-width: 1024px) {
     .layout {
         flex-direction: column;

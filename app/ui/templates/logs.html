@@ -3,34 +3,109 @@
 {% block page_title %}گزارش اجرای پردازه‌ها{% endblock %}
 {% block page_subtitle %}آخرین رویدادها و خطاهای سیستم را مرور کنید{% endblock %}
 {% block content %}
+{% set default_tab = 'jobs' if log_files else 'api' %}
 <section class="panel">
     <header class="panel-header">
         <div>
-            <h2>فایل‌های لاگ</h2>
-            <p class="panel-description">حداکثر ده فایل اخیر نمایش داده می‌شود</p>
+            <h2>لاگ‌ها</h2>
+            <p class="panel-description">گزارش پردازه‌ها و درخواست‌های API را در تب‌های مجزا مرور کنید</p>
         </div>
     </header>
-    {% if log_files %}
-        <div class="logs">
-            {% for log in log_files %}
-                <details class="log-entry" data-log-name="{{ log.name }}" {% if loop.first %}open{% endif %}>
-                    <summary>
-                        <span class="log-name">{{ log.name }}</span>
-                        <span class="log-date">آخرین تغییر: {{ log.modified_display }}</span>
-                    </summary>
-                    <p class="log-stream-status" data-log-status>در حال بارگیری داده‌های اولیه…</p>
+    <div class="log-tabs" id="log-tabs" data-default-tab="{{ default_tab }}">
+        <div class="log-tabs-nav" role="tablist">
+            <button
+                type="button"
+                class="log-tab-button {% if default_tab == 'jobs' %}is-active{% endif %}"
+                data-log-tab-button="jobs"
+                role="tab"
+                aria-controls="jobs-log-panel"
+                {% if default_tab == 'jobs' %}aria-selected="true"{% else %}aria-selected="false"{% endif %}
+            >
+                پردازه‌ها
+            </button>
+            <button
+                type="button"
+                class="log-tab-button {% if default_tab == 'api' %}is-active{% endif %}"
+                data-log-tab-button="api"
+                role="tab"
+                aria-controls="api-log-panel"
+                {% if default_tab == 'api' %}aria-selected="true"{% else %}aria-selected="false"{% endif %}
+            >
+                درخواست‌های API
+            </button>
+        </div>
+        <div class="log-tab-panels">
+            <div
+                id="jobs-log-panel"
+                class="log-tab-panel {% if default_tab == 'jobs' %}is-active{% endif %}"
+                data-log-tab-panel="jobs"
+                role="tabpanel"
+                {% if default_tab != 'jobs' %}hidden{% endif %}
+            >
+                {% if log_files %}
+                    <div class="logs">
+                        {% for log in log_files %}
+                            <details class="log-entry" data-log-name="{{ log.name }}" {% if loop.first and default_tab == 'jobs' %}open{% endif %}>
+                                <summary>
+                                    <span class="log-name">{{ log.name }}</span>
+                                    <span class="log-date">آخرین تغییر: {{ log.modified_display }}</span>
+                                </summary>
+                                <p class="log-stream-status" data-log-status>در حال بارگیری داده‌های اولیه…</p>
+                                <div class="table-wrapper">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>سطح</th>
+                                                <th>زمان</th>
+                                                <th>پیام</th>
+                                                <th>جزئیات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for entry in log.entries %}
+                                                <tr>
+                                                    <td><span class="badge badge-{{ entry.badge_class }}">{{ entry.level }}</span></td>
+                                                    <td>{{ entry.timestamp }}</td>
+                                                    <td>{{ entry.message }}</td>
+                                                    <td>
+                                                        {% if entry.details %}
+                                                            <pre class="log-details">{{ entry.details }}</pre>
+                                                        {% else %}
+                                                            -
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="empty">لاگی برای نمایش وجود ندارد.</p>
+                {% endif %}
+            </div>
+            <div
+                id="api-log-panel"
+                class="log-tab-panel {% if default_tab == 'api' %}is-active{% endif %}"
+                data-log-tab-panel="api"
+                role="tabpanel"
+                {% if default_tab != 'api' %}hidden{% endif %}
+            >
+                {% if api_entries %}
                     <div class="table-wrapper">
                         <table>
                             <thead>
                                 <tr>
                                     <th>سطح</th>
                                     <th>زمان</th>
-                                    <th>پیام</th>
+                                    <th>رویداد</th>
                                     <th>جزئیات</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for entry in log.entries %}
+                                {% for entry in api_entries %}
                                     <tr>
                                         <td><span class="badge badge-{{ entry.badge_class }}">{{ entry.level }}</span></td>
                                         <td>{{ entry.timestamp }}</td>
@@ -47,12 +122,12 @@
                             </tbody>
                         </table>
                     </div>
-                </details>
-            {% endfor %}
+                {% else %}
+                    <p class="empty">درخواستی برای نمایش وجود ندارد.</p>
+                {% endif %}
+            </div>
         </div>
-    {% else %}
-        <p class="empty">لاگی برای نمایش وجود ندارد.</p>
-    {% endif %}
+    </div>
 </section>
 {% endblock %}
 
@@ -61,6 +136,39 @@
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             const MAX_ROWS = 50;
+
+            const tabContainer = document.getElementById("log-tabs");
+            if (tabContainer) {
+                const defaultTab = tabContainer.dataset.defaultTab || "jobs";
+                const tabButtons = tabContainer.querySelectorAll("[data-log-tab-button]");
+                const tabPanels = tabContainer.querySelectorAll("[data-log-tab-panel]");
+
+                const activateTab = (name) => {
+                    tabButtons.forEach((button) => {
+                        const isActive = button.getAttribute("data-log-tab-button") === name;
+                        button.classList.toggle("is-active", isActive);
+                        button.setAttribute("aria-selected", isActive ? "true" : "false");
+                        button.setAttribute("tabindex", isActive ? "0" : "-1");
+                    });
+
+                    tabPanels.forEach((panel) => {
+                        const isActive = panel.getAttribute("data-log-tab-panel") === name;
+                        panel.classList.toggle("is-active", isActive);
+                        panel.hidden = !isActive;
+                    });
+                };
+
+                activateTab(defaultTab);
+
+                tabButtons.forEach((button) => {
+                    button.addEventListener("click", () => {
+                        const target = button.getAttribute("data-log-tab-button");
+                        if (target) {
+                            activateTab(target);
+                        }
+                    });
+                });
+            }
 
             const createCell = (contentBuilder) => {
                 const cell = document.createElement("td");

@@ -43,6 +43,7 @@ from app.backend.database import Base, SessionLocal, engine, run_startup_migrati
 from app.backend.logging_config import configure_logging
 from app.backend.monitoring import configure_monitoring
 from app.backend.services import JobProcessor
+from app.backend.services.text_graphy import TextGraphyService
 from app.backend.services.permissions import ensure_default_permissions
 
 from .app_presenters.accounts_presenter import AccountsPresenter
@@ -52,6 +53,7 @@ from .app_presenters.dashboard_presenter import DashboardPresenter
 from .app_presenters.documentation_presenter import DocumentationPresenter
 from .app_presenters.logs_presenter import LogsPresenter
 from .app_presenters.manual_video_presenter import ManualVideoPresenter
+from .app_presenters.text_graphy_presenter import TextGraphyPresenter
 from .app_presenters.scheduler_presenter import SchedulerPresenter
 from .app_presenters.settings_presenter import SettingsPresenter
 from .views import (
@@ -62,6 +64,7 @@ from .views import (
     documentation,
     metrics,
     manual_video,
+    text_graphy,
     logs,
     scheduler,
     settings,
@@ -117,6 +120,8 @@ def create_app() -> FastAPI:
     documentation_presenter = DocumentationPresenter(templates)
     ai_presenter = AIVideoWorkflowPresenter()
     manual_video_presenter = ManualVideoPresenter(templates)
+    text_graphy_service = TextGraphyService()
+    text_graphy_presenter = TextGraphyPresenter(templates, text_graphy_service)
     logs_presenter = LogsPresenter(templates)
 
     app.include_router(auth_views.create_router(auth_presenter))
@@ -125,6 +130,7 @@ def create_app() -> FastAPI:
     app.include_router(accounts.create_router(accounts_presenter))
     app.include_router(scheduler.create_router(scheduler_presenter))
     app.include_router(manual_video.create_router(manual_video_presenter))
+    app.include_router(text_graphy.create_router(text_graphy_presenter))
     app.include_router(ai.create_router(ai_presenter))
     app.include_router(documentation.create_router(documentation_presenter))
     app.include_router(metrics.create_router())

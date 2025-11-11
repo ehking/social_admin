@@ -10,9 +10,9 @@ from typing import Mapping
 from ..http_logging import log_request_failure, log_request_start, log_request_success
 
 try:  # pragma: no cover - optional dependency in some environments
-    import requests
-except Exception:  # pragma: no cover - gracefully degrade when requests missing
-    requests = None  # type: ignore[assignment]
+    import httpx
+except Exception:  # pragma: no cover - gracefully degrade when httpx missing
+    httpx = None  # type: ignore[assignment]
 
 
 LOGGER = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def get_ai_service_endpoint() -> str | None:
     return endpoint or None
 
 
-def dispatch_manual_video_job(
+async def dispatch_manual_video_job(
     job_id: int,
     payload: Mapping[str, object],
     *,
@@ -65,8 +65,8 @@ def dispatch_manual_video_job(
             f"Missing AI service endpoint. Set {_ENDPOINT_ENV_VAR} or provide 'endpoint'."
         )
 
-    if requests is None:
-        raise AIServiceDispatchError("The requests library is unavailable.")
+    if httpx is None:
+        raise AIServiceDispatchError("The httpx library is unavailable.")
 
     request_payload = dict(payload)
     started_at = log_request_start(
@@ -76,9 +76,11 @@ def dispatch_manual_video_job(
         service="ai_generation",
     )
 
+    response: httpx.Response | None = None
     try:
-        response = requests.post(url, json=request_payload, timeout=timeout)
-        response.raise_for_status()
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url, json=request_payload)
+            response.raise_for_status()
     except Exception as exc:  # pragma: no cover - defensive network error handling
         log_request_failure(
             "POST",
@@ -90,10 +92,11 @@ def dispatch_manual_video_job(
         )
         raise AIServiceDispatchError("Failed to dispatch manual video job to AI service") from exc
 
+    status_code = getattr(response, "status_code", 0)
     log_request_success(
         "POST",
         url,
-        status=getattr(response, "status_code", 0),
+        status=status_code,
         started_at=started_at,
         job_id=job_id,
         service="ai_generation",
@@ -112,9 +115,10 @@ def dispatch_manual_video_job(
             extra={"job_id": job_id},
         )
     finally:
-        close = getattr(response, "close", None)
-        if callable(close):
-            close()
+        if response is not None:
+            aclose = getattr(response, "aclose", None)
+            if callable(aclose):
+                await aclose()
 
     if isinstance(parsed, Mapping):
         response_payload = dict(parsed)

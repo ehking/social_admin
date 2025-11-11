@@ -63,7 +63,7 @@ def create_router(presenter: ManualVideoPresenter) -> APIRouter:
                 "campaign_name": campaign_name,
             },
         )
-        return presenter.create_manual_video(
+        return await presenter.create_manual_video(
             request=request,
             db=db,
             user=user,

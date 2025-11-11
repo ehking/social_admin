@@ -38,6 +38,68 @@
     </form>
     <p class="panel-footnote">نکته: جهت استفاده از API عمومی Coverr می‌توانید از شناسه‌های موجود در <a href="https://coverr.co" target="_blank" rel="noopener">کتابخانه ویدیو</a> کمک بگیرید.</p>
 </section>
+{% if stages %}
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>وضعیت پردازش</h2>
+            <p class="panel-description">گام‌های ساخت تکس گرافی به همراه جزئیات هر مرحله</p>
+        </div>
+    </header>
+    <ol class="text-graphy-stages">
+        {% for stage in stages %}
+            <li class="text-graphy-stage text-graphy-stage-{{ stage.status }}">
+                <div class="text-graphy-stage-main">
+                    <span class="text-graphy-stage-title">{{ stage.title }}</span>
+                    <span class="text-graphy-stage-status">
+                        {% if stage.status == 'completed' %}
+                            انجام شد
+                        {% elif stage.status == 'processing' %}
+                            در حال انجام
+                        {% elif stage.status == 'error' %}
+                            خطا
+                        {% else %}
+                            در انتظار
+                        {% endif %}
+                    </span>
+                </div>
+                {% if stage.detail %}
+                    <p class="text-graphy-stage-detail">{{ stage.detail }}</p>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ol>
+</section>
+{% endif %}
+{% if token_usage %}
+<section class="panel">
+    <header class="panel-header">
+        <div>
+            <h2>توکن‌های مورد استفاده</h2>
+            <p class="panel-description">توکن‌های مرتبط با ترجمه و سرویس Coverr برای این پردازش</p>
+        </div>
+    </header>
+    <ul class="text-graphy-token-list">
+        {% for token in token_usage %}
+            <li class="text-graphy-token{% if token.is_active %} is-active{% endif %}">
+                <div class="text-graphy-token-header">
+                    <span class="text-graphy-token-name">{{ token.name or '—' }}</span>
+                    <span class="text-graphy-token-key">{{ token.key or 'نامشخص' }}</span>
+                </div>
+                {% if token.endpoint_url %}
+                    <p class="text-graphy-token-endpoint">{{ token.endpoint_url }}</p>
+                {% endif %}
+                {% if token.is_active %}
+                    <span class="text-graphy-token-badge" aria-label="توکن فعال">فعال</span>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+    {% if token_hint %}
+        <p class="text-graphy-token-hint">{{ token_hint }}</p>
+    {% endif %}
+</section>
+{% endif %}
 {% if result %}
 <section class="panel">
     <header class="panel-header">
@@ -84,6 +146,17 @@
                     <div>
                         <dt>لینک موزیک</dt>
                         <dd><a href="{{ result.audio_url }}" target="_blank" rel="noopener">پخش در پنجره جدید</a></dd>
+                    </div>
+                {% endif %}
+                {% if token_label %}
+                    <div>
+                        <dt>منبع ترجمه</dt>
+                        <dd>
+                            {{ token_label }}
+                            {% if token_hint %}
+                                <span class="text-graphy-token-hint">{{ token_hint }}</span>
+                            {% endif %}
+                        </dd>
                     </div>
                 {% endif %}
             </dl>

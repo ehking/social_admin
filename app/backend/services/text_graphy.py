@@ -6,7 +6,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Iterable, List, Optional, Tuple
+from typing import Any, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
 
 try:  # pragma: no cover - optional dependency guard
@@ -182,7 +182,18 @@ class TextGraphyService:
 
         if getattr(response, "status_code", 200) >= 400:
             LOGGER.error(
-                "Coverr API returned error", extra={"status": getattr(response, "status_code", None)}
+                "Coverr API returned error",
+                extra={
+                    "status": getattr(response, "status_code", None),
+                    "video_id": video_id,
+                    "request": {
+                        "method": "GET",
+                        "url": url,
+                        "params": None,
+                        "timeout": self._request_timeout,
+                    },
+                    "response_text": self._summarize_response_text(response),
+                },
             )
             raise CoverrAPIError("شناسه ویدیو Coverr معتبر نیست یا قابل بازیابی نمی‌باشد.")
 
@@ -218,6 +229,18 @@ class TextGraphyService:
             sources=tuple(sources),
         )
         return metadata
+
+    @staticmethod
+    def _summarize_response_text(response: Any, limit: int = 500) -> Optional[str]:
+        """Safely extract a short preview of the response text for logging."""
+
+        text = getattr(response, "text", None)
+        if not text:
+            return None
+        preview = str(text)
+        if len(preview) > limit:
+            preview = f"{preview[:limit]}…"
+        return preview
 
     @staticmethod
     def _extract_video_id(reference: str) -> str:

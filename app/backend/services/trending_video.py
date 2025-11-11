@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional
 
-import arabic_reshaper
 import requests
 from bidi.algorithm import get_display
 from deep_translator import GoogleTranslator
@@ -34,7 +33,23 @@ from .storage import StorageResult, StorageService, StorageError, get_storage_se
 from .worker import Worker
 
 
+try:
+    import arabic_reshaper  # type: ignore[import]
+except ModuleNotFoundError as exc:  # pragma: no cover - import guard
+    arabic_reshaper = None  # type: ignore[assignment]
+    _ARABIC_RESHAPER_IMPORT_ERROR = exc
+else:
+    _ARABIC_RESHAPER_IMPORT_ERROR = None
+
+
 LOGGER = logging.getLogger(__name__)
+
+if _ARABIC_RESHAPER_IMPORT_ERROR is not None:
+    LOGGER.warning(
+        "arabic_reshaper is not installed – Persian captions may render incorrectly."
+    )
+
+_ARABIC_RESHAPER_WARNING_EMITTED = False
 
 _CONCURRENCY_ENV_VAR = "TRENDING_PREVIEW_MAX_CONCURRENCY"
 _DEFAULT_MAX_CONCURRENCY = 3
@@ -402,6 +417,17 @@ class TrendingVideoCreator:
     # ------------------------------------------------------------------
     @staticmethod
     def _normalize_persian_text(text: str) -> str:
+        global _ARABIC_RESHAPER_WARNING_EMITTED
+
+        if arabic_reshaper is None:
+            if not _ARABIC_RESHAPER_WARNING_EMITTED:
+                LOGGER.warning(
+                    "arabic_reshaper is unavailable; using fallback text normalization."
+                )
+                _ARABIC_RESHAPER_WARNING_EMITTED = True
+            # ``get_display`` still provides basic bidi handling.
+            return get_display(text)
+
         reshaped = arabic_reshaper.reshape(text)
         return get_display(reshaped)
 

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Callable, Optional, Sequence, Tuple, TypeVar
 
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from .. import models
 
@@ -97,6 +97,23 @@ class JobQueryService(SessionBackedService):
     def list_recent_jobs(self, *, limit: Optional[int] = None) -> Sequence[models.Job]:
         def operation(session: Session) -> Sequence[models.Job]:
             query = session.query(models.Job).order_by(models.Job.created_at.desc())
+            if limit is not None:
+                query = query.limit(limit)
+            return query.all()
+
+        return self._execute(operation)
+
+    def list_recent_media(
+        self, *, limit: Optional[int] = None
+    ) -> Sequence[models.JobMedia]:
+        def operation(session: Session) -> Sequence[models.JobMedia]:
+            query = (
+                session.query(models.JobMedia)
+                .options(
+                    selectinload(models.JobMedia.job).selectinload(models.Job.campaign)
+                )
+                .order_by(models.JobMedia.created_at.desc())
+            )
             if limit is not None:
                 query = query.limit(limit)
             return query.all()

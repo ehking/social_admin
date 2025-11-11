@@ -31,6 +31,7 @@ class AdminMenu(str, PyEnum):
     SCHEDULER = "scheduler"
     TEXT_GRAPHY = "text_graphy"
     MANUAL_VIDEO = "manual_video"
+    MEDIA_LIBRARY = "media_library"
     SETTINGS = "settings"
     DOCUMENTATION = "documentation"
     LOGS = "logs"

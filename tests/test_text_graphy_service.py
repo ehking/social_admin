@@ -7,6 +7,7 @@ import pytest
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 from app.backend.services.text_graphy import (
+    CoverrAPIError,
     CoverrVideoSource,
     LyricsProcessingError,
     TextGraphyService,
@@ -36,6 +37,20 @@ class DummyHTTPClient:
 
     def get(self, url, timeout=10):
         self.calls.append((url, timeout))
+        return DummyResponse(self.payload)
+
+
+class FlakyHTTPClient:
+    def __init__(self, payload, failures, exception_type=ConnectionError):
+        self.payload = payload
+        self.failures = failures
+        self.exception_type = exception_type
+        self.calls = 0
+
+    def get(self, url, timeout=10):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise self.exception_type("boom")
         return DummyResponse(self.payload)
 
 
@@ -101,6 +116,46 @@ def test_build_plan_translates_and_spreads_timeline():
     assert diagnostics.stages[0].status == "completed"
     assert diagnostics.token_label.startswith("FakeTranslator")
     assert plan_with_diag.total_duration == plan.total_duration
+
+
+def test_fetch_coverr_retries_on_connection_error():
+    payload = _build_payload()
+    http = FlakyHTTPClient(payload, failures=1)
+    service = TextGraphyService(
+        http_client=http,
+        translator=FakeTranslator(),
+        request_retries=2,
+        retry_backoff=0.0,
+    )
+
+    plan = service.build_plan(
+        coverr_reference="autumn-sun",
+        lyrics_text="Line one\nLine two",
+        audio_url=None,
+    )
+
+    assert http.calls == 2
+    assert plan.video.identifier == "autumn-sun"
+
+
+def test_fetch_coverr_raises_after_exhausting_retries():
+    payload = _build_payload()
+    http = FlakyHTTPClient(payload, failures=5)
+    service = TextGraphyService(
+        http_client=http,
+        translator=FakeTranslator(),
+        request_retries=1,
+        retry_backoff=0.0,
+    )
+
+    with pytest.raises(CoverrAPIError):
+        service.build_plan(
+            coverr_reference="autumn-sun",
+            lyrics_text="Line one\nLine two",
+            audio_url=None,
+        )
+
+    assert http.calls == 2
 
 
 def test_build_plan_raises_for_empty_lyrics():

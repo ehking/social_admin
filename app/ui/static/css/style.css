@@ -888,6 +888,13 @@ textarea {
     font-size: 12px;
 }
 
+.text-graphy-download-actions {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 @media (min-width: 960px) {
     .text-graphy-preview {
         grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);

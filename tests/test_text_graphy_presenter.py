@@ -1,3 +1,4 @@
+import logging
 import pathlib
 import sys
 from types import SimpleNamespace
@@ -149,3 +150,39 @@ def test_parse_duration_formats():
 
     with pytest.raises(ValueError):
         presenter._parse_duration("01:02:03:04")
+
+
+def test_presenter_exception_metadata_reports_origin():
+    presenter = TextGraphyPresenter(DummyTemplates(), StubTextGraphyService(None))
+
+    def _explode():
+        raise RuntimeError("failure")
+
+    with pytest.raises(RuntimeError) as captured:
+        _explode()
+
+    metadata = presenter._exception_metadata(captured.value)
+    assert metadata["error_origin_function"] == "_explode"
+    assert metadata["error_origin_line"] > 0
+
+
+def test_presenter_log_message_includes_origin_and_reference(caplog):
+    presenter = TextGraphyPresenter(DummyTemplates(), StubTextGraphyService(None))
+
+    def _explode():
+        raise RuntimeError("failure")
+
+    with pytest.raises(RuntimeError) as captured:
+        _explode()
+
+    with caplog.at_level(logging.ERROR, logger="app.ui.text_graphy"):
+        presenter._log_text_graphy_error(
+            "Coverr video lookup failed",
+            error=captured.value,
+            coverr_reference="sample-video",
+            level=logging.ERROR,
+        )
+
+    messages = [record.message for record in caplog.records if record.levelno >= logging.ERROR]
+    assert any("error_origin=" in message for message in messages)
+    assert any("coverr_reference=sample-video" in message for message in messages)

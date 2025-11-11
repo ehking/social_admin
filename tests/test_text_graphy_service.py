@@ -1,4 +1,5 @@
 import json
+import logging
 import pathlib
 import sys
 
@@ -7,6 +8,7 @@ import pytest
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 from app.backend.services.text_graphy import (
+    CoverrAPIError,
     CoverrVideoSource,
     LyricsProcessingError,
     TextGraphyService,
@@ -36,6 +38,20 @@ class DummyHTTPClient:
 
     def get(self, url, timeout=10):
         self.calls.append((url, timeout))
+        return DummyResponse(self.payload)
+
+
+class FlakyHTTPClient:
+    def __init__(self, payload, failures, exception_type=ConnectionError):
+        self.payload = payload
+        self.failures = failures
+        self.exception_type = exception_type
+        self.calls = 0
+
+    def get(self, url, timeout=10):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise self.exception_type("boom")
         return DummyResponse(self.payload)
 
 
@@ -103,6 +119,46 @@ def test_build_plan_translates_and_spreads_timeline():
     assert plan_with_diag.total_duration == plan.total_duration
 
 
+def test_fetch_coverr_retries_on_connection_error():
+    payload = _build_payload()
+    http = FlakyHTTPClient(payload, failures=1)
+    service = TextGraphyService(
+        http_client=http,
+        translator=FakeTranslator(),
+        request_retries=2,
+        retry_backoff=0.0,
+    )
+
+    plan = service.build_plan(
+        coverr_reference="autumn-sun",
+        lyrics_text="Line one\nLine two",
+        audio_url=None,
+    )
+
+    assert http.calls == 2
+    assert plan.video.identifier == "autumn-sun"
+
+
+def test_fetch_coverr_raises_after_exhausting_retries():
+    payload = _build_payload()
+    http = FlakyHTTPClient(payload, failures=5)
+    service = TextGraphyService(
+        http_client=http,
+        translator=FakeTranslator(),
+        request_retries=1,
+        retry_backoff=0.0,
+    )
+
+    with pytest.raises(CoverrAPIError):
+        service.build_plan(
+            coverr_reference="autumn-sun",
+            lyrics_text="Line one\nLine two",
+            audio_url=None,
+        )
+
+    assert http.calls == 2
+
+
 def test_build_plan_raises_for_empty_lyrics():
     service = TextGraphyService(
         http_client=DummyHTTPClient(_build_payload()),
@@ -115,3 +171,54 @@ def test_build_plan_raises_for_empty_lyrics():
             lyrics_text="\n\n  ",
             audio_url=None,
         )
+
+
+def test_exception_metadata_reports_origin():
+    service = TextGraphyService(
+        http_client=DummyHTTPClient(_build_payload()),
+        translator=FakeTranslator(),
+    )
+
+    def _trigger_error():
+        raise ValueError("boom")
+
+    with pytest.raises(ValueError) as caught:
+        _trigger_error()
+
+    metadata = service._exception_metadata(caught.value)
+    assert metadata["error_type"] == "ValueError"
+    assert metadata["error_origin_function"] == "_trigger_error"
+    assert metadata["error_origin_line"] > 0
+
+
+class ErroringResponse:
+    def __init__(self, status_code=500, text="boom"):
+        self.status_code = status_code
+        self.text = text
+
+    def json(self):  # pragma: no cover - should not be called
+        raise AssertionError("json() should not be invoked for error responses")
+
+
+class ErroringHTTPClient:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def get(self, url, timeout=10):
+        self.calls.append((url, timeout))
+        return self.response
+
+
+def test_service_logs_include_location_in_message(caplog):
+    response = ErroringResponse(status_code=404, text="missing")
+    http = ErroringHTTPClient(response)
+    service = TextGraphyService(http_client=http, translator=FakeTranslator())
+
+    with caplog.at_level(logging.ERROR, logger="app.backend.services.text_graphy"):
+        with pytest.raises(CoverrAPIError):
+            service.fetch_coverr_video("missing-video")
+
+    assert http.calls
+    error_logs = [record.message for record in caplog.records if record.levelno >= logging.ERROR]
+    assert any("service_location=" in message for message in error_logs)

@@ -309,9 +309,20 @@ class TextGraphyService:
         default_base = DEFAULT_COVERR_BASE_URL.rstrip("/").lower()
         current_base = self._coverr_base_url.rstrip("/").lower()
         if current_base == default_base:
-            fallback_base = "https://coverr.co/api/v3"
-            urls.append(f"{fallback_base}/videos/{video_id}")
-            urls.append(f"{fallback_base}/videos?slug={video_id}")
+            fallback_bases = [
+                "https://coverr.co/api/v3",
+                "https://coverr.co/api",
+            ]
+            fallback_templates = (
+                "{base}/videos/{video_id}",
+                "{base}/videos?slug={video_id}",
+                "{base}/videos/slug/{video_id}",
+                "{base}/video/{video_id}",
+                "{base}/video?slug={video_id}",
+            )
+            for base in fallback_bases:
+                for template in fallback_templates:
+                    urls.append(template.format(base=base, video_id=video_id))
 
         # Ensure deterministic order without duplicates
         deduped = []
@@ -327,6 +338,16 @@ class TextGraphyService:
         if isinstance(payload, dict):
             if "videos" in payload and isinstance(payload["videos"], list):
                 return TextGraphyService._select_coverr_candidate(payload["videos"], video_id)
+            if "items" in payload and isinstance(payload["items"], list):
+                return TextGraphyService._select_coverr_candidate(payload["items"], video_id)
+            if "data" in payload and isinstance(payload["data"], list):
+                return TextGraphyService._select_coverr_candidate(payload["data"], video_id)
+            if (
+                "data" in payload
+                and isinstance(payload["data"], dict)
+                and not any(key in payload for key in ("id", "slug", "videoId", "title", "name"))
+            ):
+                return TextGraphyService._normalise_coverr_payload(payload["data"], video_id)
             if "video" in payload and isinstance(payload["video"], dict) and not any(
                 key in payload for key in ("id", "slug", "videoId", "title", "name")
             ):

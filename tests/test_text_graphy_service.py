@@ -253,3 +253,19 @@ def test_fetch_coverr_fallback_when_primary_endpoint_fails():
     assert first_url.startswith("https://api.coverr.co/videos/")
     assert second_url.startswith("https://coverr.co/api/v3/videos")
     assert video.identifier == payload["id"]
+
+
+def test_fetch_coverr_exhaustive_fallback_to_slug_query():
+    payload = _build_payload()
+    error_responses = [ErroringResponse(status_code=404, text="missing") for _ in range(7)]
+    http = SequencedHTTPClient([*error_responses, DummyResponse(payload)])
+    service = TextGraphyService(http_client=http, translator=FakeTranslator())
+
+    video = service.fetch_coverr_video("cozy-diner-scene-with-neon-eat-sign")
+
+    assert len(http.calls) == 8
+    urls = [url for url, _ in http.calls]
+    assert urls[0].startswith("https://api.coverr.co/videos/")
+    assert any(url.startswith("https://coverr.co/api/v3/videos?slug=") for url in urls)
+    assert urls[-1].startswith("https://coverr.co/api/videos?slug=")
+    assert video.identifier == payload["id"]

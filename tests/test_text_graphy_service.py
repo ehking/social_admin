@@ -154,6 +154,43 @@ def test_service_initialises_without_optional_translator(monkeypatch):
     assert service._token_hint is None
 
 
+def test_missing_translator_warning_emitted_once(monkeypatch, caplog):
+    payload = _build_payload()
+    http = DummyHTTPClient(payload)
+    monkeypatch.setattr("app.backend.services.text_graphy.GoogleTranslator", None)
+
+    original_build = TextGraphyService._build_translator
+    build_calls = 0
+
+    def _counting_build_translator():
+        nonlocal build_calls
+        build_calls += 1
+        return original_build()
+
+    monkeypatch.setattr(
+        TextGraphyService,
+        "_build_translator",
+        staticmethod(_counting_build_translator),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="app.backend.services.text_graphy"):
+        service = TextGraphyService(http_client=http)
+        service.build_plan(
+            coverr_reference="https://coverr.co/videos/autumn-sun",
+            lyrics_text="Line one\nLine two\nLine three",
+            audio_url="https://audio.example/song.mp3",
+            audio_duration=180,
+        )
+
+    assert build_calls == 1
+    translator_warnings = [
+        record
+        for record in caplog.records
+        if "deep-translator not available" in record.getMessage()
+    ]
+    assert len(translator_warnings) == 1
+
+
 def test_fetch_coverr_retries_on_connection_error():
     payload = _build_payload()
     http = FlakyHTTPClient(payload, failures=1)

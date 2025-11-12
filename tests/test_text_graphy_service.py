@@ -83,6 +83,37 @@ def _build_payload():
     }
 
 
+def test_extract_sources_supports_format_grouping():
+    payload = _build_payload()
+    payload["video"] = {
+        "mp4": {
+            "sd": "https://coverr.example/autumn-sd.mp4",
+            "hd": "https://coverr.example/autumn-hd.mp4",
+        },
+        "webm": {
+            "sd": "https://coverr.example/autumn-sd.webm",
+        },
+    }
+
+    http = DummyHTTPClient(payload)
+    service = TextGraphyService(http_client=http, translator=FakeTranslator())
+
+    plan = service.build_plan(
+        coverr_reference="autumn-sun",
+        lyrics_text="Line one\nLine two",
+        audio_url=None,
+    )
+
+    quality_format_pairs = {(source.quality, source.format) for source in plan.video.sources}
+
+    assert ("sd", "mp4") in quality_format_pairs
+    assert ("hd", "mp4") in quality_format_pairs
+
+    mp4_sources = [source for source in plan.video.sources if source.format == "mp4"]
+    assert mp4_sources
+    assert all(source.mime_type == "video/mp4" for source in mp4_sources)
+
+
 def test_build_plan_translates_and_spreads_timeline():
     payload = _build_payload()
     http = DummyHTTPClient(payload)

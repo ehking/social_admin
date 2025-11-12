@@ -188,6 +188,12 @@ class TextGraphyService:
             http_client = requests
         self._http = http_client
         self._translator = None
+        # ``_translator_unavailable`` is used to avoid repeatedly attempting to
+        # construct an optional translator when we already know it is not
+        # available (for example, when the optional dependency is not
+        # installed). Without this guard the service would emit the same
+        # warning for every line it tries to translate.
+        self._translator_unavailable = False
         self._update_translator(translator or self._build_translator())
         self._coverr_base_url = coverr_base_url.rstrip("/")
         self._default_line_duration = max(0.5, float(default_line_duration))
@@ -642,7 +648,7 @@ class TextGraphyService:
     def _ensure_translator(self) -> Optional[GoogleTranslator]:
         """(Re)initialise the translator if it is currently unavailable."""
 
-        if self._translator is None:
+        if self._translator is None and not self._translator_unavailable:
             self._update_translator(self._build_translator())
         return self._translator
 
@@ -650,6 +656,7 @@ class TextGraphyService:
         """Store the provided translator and refresh diagnostic metadata."""
 
         self._translator = translator
+        self._translator_unavailable = translator is None
         self._token_label = self._infer_translator_label(self._translator)
         self._token_hint = self._build_token_hint(self._translator)
 

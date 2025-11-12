@@ -21,7 +21,14 @@ except ModuleNotFoundError as exc:  # pragma: no cover - import guard
     _BIDI_IMPORT_ERROR = exc
 else:  # pragma: no cover - import guard
     _BIDI_IMPORT_ERROR = None
-from deep_translator import GoogleTranslator
+
+try:  # pragma: no cover - optional dependency guard
+    from deep_translator import GoogleTranslator
+except ModuleNotFoundError as exc:  # pragma: no cover - import guard
+    GoogleTranslator = None  # type: ignore[assignment]
+    _DEEP_TRANSLATOR_IMPORT_ERROR = exc
+else:  # pragma: no cover - import guard
+    _DEEP_TRANSLATOR_IMPORT_ERROR = None
 from moviepy.editor import (
     AudioFileClip,
     ColorClip,
@@ -58,8 +65,22 @@ if _ARABIC_RESHAPER_IMPORT_ERROR is not None:
 if _BIDI_IMPORT_ERROR is not None:
     LOGGER.warning("python-bidi is not installed – Persian captions may render incorrectly.")
 
+if _DEEP_TRANSLATOR_IMPORT_ERROR is not None:
+    LOGGER.warning(
+        "deep-translator is not installed – captions will not be automatically translated.",
+    )
+
 _ARABIC_RESHAPER_WARNING_EMITTED = False
 _BIDI_WARNING_EMITTED = False
+_DEEP_TRANSLATOR_WARNING_EMITTED = _DEEP_TRANSLATOR_IMPORT_ERROR is not None
+
+
+class _IdentityTranslator:
+    """Fallback translator that returns the original text."""
+
+    @staticmethod
+    def translate(text: str) -> str:
+        return text
 
 
 def _apply_bidi(text: str) -> str:
@@ -378,7 +399,7 @@ class TrendingVideoCreator:
         width: int = 1080,
         height: int = 1920,
         background_color: tuple[int, int, int] = (0, 0, 0),
-        translator: Optional[GoogleTranslator] = None,
+        translator: Optional[Any] = None,
         worker: Worker | None = None,
         storage_service: StorageService | None = None,
         db_session: Session | None = None,
@@ -391,7 +412,7 @@ class TrendingVideoCreator:
         self.width = width
         self.height = height
         self.background_color = background_color
-        self.translator = translator or GoogleTranslator(source="auto", target="fa")
+        self.translator = translator or self._build_translator()
         self.settings = settings or get_settings()
         self.worker = worker or Worker(settings=self.settings)
         self.storage_service = storage_service or get_storage_service(self.settings)
@@ -461,6 +482,20 @@ class TrendingVideoCreator:
         translated = self.translator.translate(text)
         LOGGER.debug("Translated text: %s", translated)
         return self._normalize_persian_text(translated)
+
+    @staticmethod
+    def _build_translator():
+        global _DEEP_TRANSLATOR_WARNING_EMITTED
+
+        if GoogleTranslator is None:
+            if not _DEEP_TRANSLATOR_WARNING_EMITTED:
+                LOGGER.warning(
+                    "deep-translator is unavailable; using untranslated captions.",
+                )
+                _DEEP_TRANSLATOR_WARNING_EMITTED = True
+            return _IdentityTranslator()
+
+        return GoogleTranslator(source="auto", target="fa")
 
     # ------------------------------------------------------------------
     # Video rendering

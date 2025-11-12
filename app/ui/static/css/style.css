@@ -1371,6 +1371,10 @@ textarea {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease, transform 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
 
 .ajax-feedback:not([hidden]) {
@@ -1397,4 +1401,29 @@ textarea {
 .ajax-feedback--info {
     background: var(--accent);
     color: #ffffff;
+}
+
+.ajax-feedback--loading {
+    background: rgba(15, 23, 42, 0.92);
+    color: var(--sidebar-text);
+}
+
+.ajax-feedback--loading::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    display: inline-block;
+    animation: ajax-feedback-spin 0.75s linear infinite;
+}
+
+@keyframes ajax-feedback-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }

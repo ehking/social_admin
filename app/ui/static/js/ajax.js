@@ -1,6 +1,7 @@
 (function () {
   const FEEDBACK_ID = 'ajax-feedback';
   const FEEDBACK_TIMEOUT = 6000;
+  const DEFAULT_LOADING_MESSAGE = 'در حال ارسال درخواست...';
   let feedbackTimer = null;
 
   function getFeedbackContainer() {
@@ -44,7 +45,11 @@
     if (feedbackTimer) {
       window.clearTimeout(feedbackTimer);
     }
-    feedbackTimer = window.setTimeout(clearFeedback, FEEDBACK_TIMEOUT);
+    if (kind === 'loading') {
+      feedbackTimer = null;
+    } else {
+      feedbackTimer = window.setTimeout(clearFeedback, FEEDBACK_TIMEOUT);
+    }
   }
 
   function disableSubmitter(submitter, disabled) {
@@ -142,6 +147,11 @@
     }
 
     disableSubmitter(submitter, true);
+
+    const loadingMessage = form.dataset.ajaxLoadingMessage || DEFAULT_LOADING_MESSAGE;
+    if (!form.dataset.ajaxSilent) {
+      showFeedback('loading', loadingMessage);
+    }
 
     const { url, options } = buildRequest(form, submitter);
 

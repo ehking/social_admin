@@ -47,7 +47,7 @@ class AccountsPresenter:
         }
         if load_error:
             context["error"] = load_error
-        return self.templates.TemplateResponse("accounts.html", context)
+        return self.templates.TemplateResponse(request, "accounts.html", context)
 
     def account_form(
         self,
@@ -80,7 +80,7 @@ class AccountsPresenter:
         }
         if error_message:
             context["error"] = error_message
-        return self.templates.TemplateResponse("account_form.html", context)
+        return self.templates.TemplateResponse(request, "account_form.html", context)
 
     def save_account(
         self,
@@ -139,7 +139,9 @@ class AccountsPresenter:
             }
             if load_error:
                 context.setdefault("load_error", load_error)
-            return self.templates.TemplateResponse("accounts.html", context, status_code=404)
+            return self.templates.TemplateResponse(
+                request, "accounts.html", context, status_code=404
+            )
         except DatabaseServiceError as exc:
             self.logger.error(
                 "Failed to save account",
@@ -162,7 +164,9 @@ class AccountsPresenter:
             }
             if load_error:
                 context.setdefault("load_error", load_error)
-            return self.templates.TemplateResponse("accounts.html", context, status_code=500)
+            return self.templates.TemplateResponse(
+                request, "accounts.html", context, status_code=500
+            )
 
         action = "created" if created else "updated"
         self.logger.info(
@@ -208,7 +212,9 @@ class AccountsPresenter:
             }
             if load_error:
                 context.setdefault("load_error", load_error)
-            return self.templates.TemplateResponse("accounts.html", context, status_code=500)
+            return self.templates.TemplateResponse(
+                request, "accounts.html", context, status_code=500
+            )
 
         if deleted:
             self.logger.info(

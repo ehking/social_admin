@@ -68,4 +68,4 @@ class DashboardPresenter:
             # Preserve insertion order while removing duplicates
             unique_messages = list(dict.fromkeys(error_messages))
             context["error"] = " ".join(unique_messages)
-        return self.templates.TemplateResponse("dashboard.html", context)
+        return self.templates.TemplateResponse(request, "dashboard.html", context)

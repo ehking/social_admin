@@ -46,7 +46,7 @@ class DocumentationPresenter:
                 "spec_text": content,
                 "active_page": "documentation",
             }
-        return self.templates.TemplateResponse("documentation.html", context)
+        return self.templates.TemplateResponse(request, "documentation.html", context)
 
     def _load_spec_text(self) -> str:
         try:

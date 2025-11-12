@@ -43,7 +43,7 @@ class SettingsPresenter:
         }
         if load_error:
             context["error"] = load_error
-        return self.templates.TemplateResponse("settings.html", context)
+        return self.templates.TemplateResponse(request, "settings.html", context)
 
     def save_token(
         self,
@@ -86,7 +86,9 @@ class SettingsPresenter:
             }
             if load_error:
                 context.setdefault("load_error", load_error)
-            return self.templates.TemplateResponse("settings.html", context, status_code=500)
+            return self.templates.TemplateResponse(
+                request, "settings.html", context, status_code=500
+            )
 
         action = "created" if created else "updated"
         self.logger.info(
@@ -132,7 +134,9 @@ class SettingsPresenter:
             }
             if load_error:
                 context.setdefault("load_error", load_error)
-            return self.templates.TemplateResponse("settings.html", context, status_code=500)
+            return self.templates.TemplateResponse(
+                request, "settings.html", context, status_code=500
+            )
 
         if deleted:
             self.logger.info(

@@ -329,7 +329,7 @@ class ManualVideoPresenter:
         }
         if load_error:
             context["error"] = load_error
-        return self.templates.TemplateResponse("manual_video.html", context)
+        return self.templates.TemplateResponse(request, "manual_video.html", context)
 
     @staticmethod
     def _should_download_media(url: str) -> bool:
@@ -507,7 +507,7 @@ class ManualVideoPresenter:
                     payload["warning"] = load_error
                 return json_error(error_message, status_code=400, **payload)
             return self.templates.TemplateResponse(
-                "manual_video.html", context, status_code=400
+                request, "manual_video.html", context, status_code=400
             )
 
         if clean_ai_tool not in self._ai_tools:
@@ -529,7 +529,7 @@ class ManualVideoPresenter:
                     payload["warning"] = load_error
                 return json_error("ابزار هوش مصنوعی انتخاب‌شده معتبر نیست.", status_code=400, **payload)
             return self.templates.TemplateResponse(
-                "manual_video.html", context, status_code=400
+                request, "manual_video.html", context, status_code=400
             )
 
         job = None
@@ -578,7 +578,7 @@ class ManualVideoPresenter:
                     payload["warning"] = load_error
                 return json_error(error_message, status_code=400, **payload)
             return self.templates.TemplateResponse(
-                "manual_video.html", context, status_code=400
+                request, "manual_video.html", context, status_code=400
             )
 
         if job and job.id:

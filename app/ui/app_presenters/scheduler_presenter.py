@@ -93,7 +93,7 @@ class SchedulerPresenter:
         }
         if errors:
             context["error"] = " ".join(dict.fromkeys(errors))
-        return self.templates.TemplateResponse("scheduler.html", context)
+        return self.templates.TemplateResponse(request, "scheduler.html", context)
 
     def create_schedule(
         self,
@@ -139,7 +139,9 @@ class SchedulerPresenter:
                 if extra_errors:
                     payload["warning"] = " ".join(dict.fromkeys(extra_errors))
                 return JSONResponse(payload, status_code=400)
-            return self.templates.TemplateResponse("scheduler.html", context, status_code=400)
+            return self.templates.TemplateResponse(
+                request, "scheduler.html", context, status_code=400
+            )
 
         text_content = content.strip() or None if content else None
         video_link = video_url.strip() or None if video_url else None
@@ -181,7 +183,9 @@ class SchedulerPresenter:
                 if extra_errors:
                     payload["warning"] = " ".join(dict.fromkeys(extra_errors))
                 return JSONResponse(payload, status_code=500)
-            return self.templates.TemplateResponse("scheduler.html", context, status_code=500)
+            return self.templates.TemplateResponse(
+                request, "scheduler.html", context, status_code=500
+            )
 
         self.logger.info(
             "Post scheduled",
@@ -243,7 +247,9 @@ class SchedulerPresenter:
                 if extra_errors:
                     payload["warning"] = " ".join(dict.fromkeys(extra_errors))
                 return JSONResponse(payload, status_code=500)
-            return self.templates.TemplateResponse("scheduler.html", context, status_code=500)
+            return self.templates.TemplateResponse(
+                request, "scheduler.html", context, status_code=500
+            )
 
         if deleted:
             self.logger.info(

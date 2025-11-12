@@ -25,7 +25,7 @@ class DummyTemplates:
     def __init__(self):
         self.calls = []
 
-    def TemplateResponse(self, template_name, context):
+    def TemplateResponse(self, request, template_name, context, **_kwargs):
         self.calls.append((template_name, context))
         return context
 

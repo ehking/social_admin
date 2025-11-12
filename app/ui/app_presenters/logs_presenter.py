@@ -47,7 +47,7 @@ class LogsPresenter:
             log_files=log_files,
             api_entries=api_entries,
         )
-        return self.templates.TemplateResponse("logs.html", context)
+        return self.templates.TemplateResponse(request, "logs.html", context)
 
     def _collect_log_files(self) -> List[LogFileSummary]:
         if not self.log_directory.exists():

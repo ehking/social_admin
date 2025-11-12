@@ -71,7 +71,7 @@ class MediaLibraryPresenter:
             context["error"] = error
         elif not items:
             context["info"] = "هنوز رسانه‌ای در سیستم ثبت نشده است."
-        return self.templates.TemplateResponse("media_library.html", context)
+        return self.templates.TemplateResponse(request, "media_library.html", context)
 
     def _load_media(self, db: Session) -> tuple[list[MediaAssetView], Optional[str]]:
         service = JobQueryService(db)

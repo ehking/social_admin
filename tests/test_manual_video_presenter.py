@@ -175,7 +175,7 @@ def test_create_manual_video_dispatches_to_ai(monkeypatch, tmp_path):
         lambda self, _url: False,
     )
 
-    request = SimpleNamespace()
+    request = SimpleNamespace(headers={})
     db = object()
     user = SimpleNamespace(id=7)
     ai_tool = presenter._ai_tools[0]

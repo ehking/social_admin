@@ -37,6 +37,8 @@ try:  # pragma: no cover - optional dependency in minimal test environments
 except Exception:  # pragma: no cover - fallback when httpx unavailable
     httpx = None  # type: ignore[assignment]
 
+from .helpers import is_ajax_request, json_error, json_success
+
 
 @dataclass(frozen=True, slots=True)
 class StatusPresentation:
@@ -482,22 +484,28 @@ class ManualVideoPresenter:
             or not clean_campaign_name
             or not clean_ai_tool
         ):
+            error_message = "عنوان، لینک ویدیو و نام کمپین الزامی هستند."
+            if not clean_ai_tool:
+                error_message = (
+                    "عنوان، لینک ویدیو، نام کمپین و نام ابزار هوش مصنوعی الزامی هستند."
+                )
             context = {
                 "request": request,
                 "user": user,
                 "jobs": jobs,
-                "error": "عنوان، لینک ویدیو و نام کمپین الزامی هستند.",
+                "error": error_message,
                 "active_page": "manual_video",
                 "ai_tools": self._ai_tools,
                 "sample_ai_videos": SAMPLE_AI_VIDEOS,
                 "manual_video_defaults": self._build_form_defaults(),
             }
-            if not clean_ai_tool:
-                context["error"] = (
-                    "عنوان، لینک ویدیو، نام کمپین و نام ابزار هوش مصنوعی الزامی هستند."
-                )
             if load_error:
                 context.setdefault("load_error", load_error)
+            if is_ajax_request(request):
+                payload: dict[str, object] = {}
+                if load_error:
+                    payload["warning"] = load_error
+                return json_error(error_message, status_code=400, **payload)
             return self.templates.TemplateResponse(
                 "manual_video.html", context, status_code=400
             )
@@ -515,6 +523,11 @@ class ManualVideoPresenter:
             }
             if load_error:
                 context.setdefault("load_error", load_error)
+            if is_ajax_request(request):
+                payload: dict[str, object] = {}
+                if load_error:
+                    payload["warning"] = load_error
+                return json_error("ابزار هوش مصنوعی انتخاب‌شده معتبر نیست.", status_code=400, **payload)
             return self.templates.TemplateResponse(
                 "manual_video.html", context, status_code=400
             )
@@ -546,11 +559,12 @@ class ManualVideoPresenter:
                 "Validation error while creating manual video", extra={"error": str(exc)}
             )
             jobs, load_error = self._load_recent_jobs(db)
+            error_message = "ثبت ویدیو با خطا مواجه شد: " + str(exc)
             context = {
                 "request": request,
                 "user": user,
                 "jobs": jobs,
-                "error": "ثبت ویدیو با خطا مواجه شد: " + str(exc),
+                "error": error_message,
                 "active_page": "manual_video",
                 "ai_tools": self._ai_tools,
                 "sample_ai_videos": SAMPLE_AI_VIDEOS,
@@ -558,6 +572,11 @@ class ManualVideoPresenter:
             }
             if load_error:
                 context.setdefault("load_error", load_error)
+            if is_ajax_request(request):
+                payload: dict[str, object] = {}
+                if load_error:
+                    payload["warning"] = load_error
+                return json_error(error_message, status_code=400, **payload)
             return self.templates.TemplateResponse(
                 "manual_video.html", context, status_code=400
             )
@@ -598,4 +617,9 @@ class ManualVideoPresenter:
                 "ai_tool": clean_ai_tool,
             },
         )
+        if is_ajax_request(request):
+            payload: dict[str, object] = {"redirect": "/manual-video"}
+            if job and job.id:
+                payload["job_id"] = job.id
+            return json_success("وظیفه ساخت ویدیو با موفقیت ثبت شد.", **payload)
         return RedirectResponse(url="/manual-video", status_code=302)

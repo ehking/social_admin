@@ -169,6 +169,7 @@ from .app_presenters.auth_presenter import AuthPresenter
 from .app_presenters.dashboard_presenter import DashboardPresenter
 from .app_presenters.documentation_presenter import DocumentationPresenter
 from .app_presenters.logs_presenter import LogsPresenter
+from .app_presenters.helpers import is_ajax_request
 from .app_presenters.manual_video_presenter import ManualVideoPresenter
 from .app_presenters.media_library_presenter import MediaLibraryPresenter
 from .app_presenters.text_graphy_presenter import TextGraphyPresenter
@@ -191,6 +192,7 @@ from .views import (
 
 configure_logging()
 logger = logging.getLogger(__name__)
+ajax_logger = logging.getLogger("app.ui.ajax")
 
 REQUEST_COUNT = Counter(
     "social_admin_requests_total", "Total HTTP requests", ["method", "path", "status"]
@@ -258,6 +260,31 @@ def create_app() -> FastAPI:
     app.include_router(logs.create_router(logs_presenter))
 
     logger.info("Registered routers for application", extra={"routers": len(app.routes)})
+
+    @app.middleware("http")
+    async def ajax_logging_middleware(request: Request, call_next):
+        ajax_request = is_ajax_request(request)
+        start_time = perf_counter() if ajax_request else None
+        response: Response = await call_next(request)
+        if ajax_request:
+            duration = 0.0
+            if start_time is not None:
+                duration = perf_counter() - start_time
+            client_ip = request.client.host if request.client else None
+            user_agent = request.headers.get("user-agent")
+            referer = request.headers.get("referer")
+            extra = {
+                "method": request.method,
+                "path": request.url.path,
+                "status": response.status_code,
+                "duration": round(duration, 6),
+                "client": client_ip,
+                "user_agent": user_agent,
+                "referer": referer,
+                "outcome": "success" if response.status_code < 400 else "error",
+            }
+            ajax_logger.info("ajax_request", extra=extra)
+        return response
 
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):

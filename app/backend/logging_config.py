@@ -12,7 +12,10 @@ DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
     "formatters": {
         "standard": {
             "format": "%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s",
-        }
+        },
+        "json": {
+            "()": "app.backend.logging_utils.JsonLogFormatter",
+        },
     },
     "handlers": {
         "console": {
@@ -33,11 +36,23 @@ DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
             "maxBytes": 5 * 1024 * 1024,
             "backupCount": 3,
         },
+        "ui_ajax_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "formatter": "json",
+            "filename": "logs/jobs/ui_ajax.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 3,
+        },
     },
     "loggers": {
         "": {"handlers": ["console", "service_file"], "level": "INFO"},
         "app.api": {
             "handlers": ["api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "app.ui.ajax": {
+            "handlers": ["ui_ajax_file"],
             "level": "INFO",
             "propagate": False,
         },

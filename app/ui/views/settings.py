@@ -97,6 +97,11 @@ def create_router(presenter: SettingsPresenter) -> APIRouter:
         if not user:
             return RedirectResponse(url="/login", status_code=302)
         form_data = await request.form()
-        return presenter.update_permissions(db=db, user=user, form_data=form_data)
+        return presenter.update_permissions(
+            request=request,
+            db=db,
+            user=user,
+            form_data=form_data,
+        )
 
     return router

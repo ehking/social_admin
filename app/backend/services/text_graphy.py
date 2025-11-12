@@ -187,14 +187,14 @@ class TextGraphyService:
                 raise RuntimeError("requests library is required for TextGraphyService")
             http_client = requests
         self._http = http_client
-        self._translator = translator or self._build_translator()
+        self._translator = None
+        self._update_translator(translator or self._build_translator())
         self._coverr_base_url = coverr_base_url.rstrip("/")
         self._default_line_duration = max(0.5, float(default_line_duration))
         self._request_timeout = request_timeout
         self._request_retries = max(0, int(request_retries))
         self._retry_backoff = max(0.0, float(retry_backoff))
-        self._token_label = self._infer_translator_label(self._translator)
-        self._token_hint = self._build_token_hint(self._translator)
+        # The translator metadata is derived inside ``_update_translator``.
 
     @staticmethod
     def _build_translator() -> Optional[GoogleTranslator]:
@@ -639,11 +639,26 @@ class TextGraphyService:
             current_start += line_duration
         return computed_lines
 
+    def _ensure_translator(self) -> Optional[GoogleTranslator]:
+        """(Re)initialise the translator if it is currently unavailable."""
+
+        if self._translator is None:
+            self._update_translator(self._build_translator())
+        return self._translator
+
+    def _update_translator(self, translator: Optional[GoogleTranslator]) -> None:
+        """Store the provided translator and refresh diagnostic metadata."""
+
+        self._translator = translator
+        self._token_label = self._infer_translator_label(self._translator)
+        self._token_hint = self._build_token_hint(self._translator)
+
     def _translate(self, text: str) -> str:
-        if not self._translator:
+        translator = self._ensure_translator()
+        if not translator:
             return text
         try:
-            translated = self._translator.translate(text)
+            translated = translator.translate(text)
         except Exception as exc:  # pragma: no cover - depends on external service
             self._log_service_event(
                 logging.ERROR,

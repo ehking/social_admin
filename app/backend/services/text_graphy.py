@@ -197,10 +197,21 @@ class TextGraphyService:
         self._token_hint = self._build_token_hint(self._translator)
 
     @staticmethod
-    def _build_translator() -> GoogleTranslator:
+    def _build_translator() -> Optional[GoogleTranslator]:
         if GoogleTranslator is None:  # pragma: no cover - optional dependency guard
-            raise RuntimeError("deep-translator is required for TextGraphyService")
-        return GoogleTranslator(source="auto", target="fa")
+            LOGGER.warning(
+                "deep-translator not available; automatic lyric translation disabled"
+            )
+            return None
+        try:
+            return GoogleTranslator(source="auto", target="fa")
+        except Exception as exc:  # pragma: no cover - depends on optional dependency
+            LOGGER.warning(
+                "Failed to initialise deep-translator; automatic lyric translation disabled",
+                extra={"error_type": exc.__class__.__name__, "error_message": str(exc)},
+                exc_info=True,
+            )
+            return None
 
     def fetch_coverr_video(self, reference: str) -> CoverrVideoMetadata:
         """Retrieve metadata for the requested Coverr video."""

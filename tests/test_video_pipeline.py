@@ -7,6 +7,8 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 import shutil
 
+import pytest
+
 from app.backend.services import trending_video
 from app.backend.services.storage import StorageResult
 from app.backend.services.trending_video import TrendingTrack, TrendingVideoCreator
@@ -104,6 +106,25 @@ def test_assemble_video_produces_file_and_metadata(monkeypatch, tmp_path):
     assert composite.write_args["audio_codec"] == "aac"
     assert composite.write_args["remove_temp"] is True
     assert composite.write_args["temp_audiofile"].endswith(".temp-audio.m4a")
+
+
+def test_assemble_video_raises_helpful_error_when_moviepy_missing(monkeypatch, tmp_path):
+    font_path = tmp_path / "dummy-font.ttf"
+    font_path.write_text("fake font")
+    audio_path = tmp_path / "preview.m4a"
+    audio_path.write_bytes(b"audio")
+    output_path = tmp_path / "output.mp4"
+
+    monkeypatch.setattr(trending_video, "AudioFileClip", None, raising=False)
+    monkeypatch.setattr(trending_video, "ColorClip", None, raising=False)
+    monkeypatch.setattr(trending_video, "CompositeVideoClip", None, raising=False)
+
+    creator = TrendingVideoCreator(font_path=font_path)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        creator.assemble_video(audio_path=audio_path, text="نمونه", output_path=output_path)
+
+    assert "moviepy is required" in str(excinfo.value)
 
 
 def test_generate_trend_video_creates_local_copy(monkeypatch, tmp_path):

@@ -11,7 +11,18 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Type,
+    cast,
+)
 
 import requests
 try:  # pragma: no cover - import guard exercised in production
@@ -29,12 +40,32 @@ except ModuleNotFoundError as exc:  # pragma: no cover - import guard
     _DEEP_TRANSLATOR_IMPORT_ERROR = exc
 else:  # pragma: no cover - import guard
     _DEEP_TRANSLATOR_IMPORT_ERROR = None
-from moviepy.editor import (
-    AudioFileClip,
-    ColorClip,
-    CompositeVideoClip,
-    TextClip,
-)
+try:  # pragma: no cover - optional dependency guard
+    from moviepy.editor import (
+        AudioFileClip,
+        ColorClip,
+        CompositeVideoClip,
+        TextClip,
+    )
+except ModuleNotFoundError as exc:  # pragma: no cover - import guard
+    AudioFileClip = None  # type: ignore[assignment]
+    ColorClip = None  # type: ignore[assignment]
+    CompositeVideoClip = None  # type: ignore[assignment]
+    TextClip = None  # type: ignore[assignment]
+    _MOVIEPY_IMPORT_ERROR = exc
+else:  # pragma: no cover - import guard
+    _MOVIEPY_IMPORT_ERROR = None
+
+if TYPE_CHECKING:  # pragma: no cover - typing helpers
+    from moviepy.editor import AudioFileClip as _AudioFileClip
+    from moviepy.editor import ColorClip as _ColorClip
+    from moviepy.editor import CompositeVideoClip as _CompositeVideoClip
+    from moviepy.editor import TextClip as _TextClip
+else:  # pragma: no cover - typing helpers
+    _AudioFileClip = Any
+    _ColorClip = Any
+    _CompositeVideoClip = Any
+    _TextClip = Any
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -73,6 +104,7 @@ if _DEEP_TRANSLATOR_IMPORT_ERROR is not None:
 _ARABIC_RESHAPER_WARNING_EMITTED = False
 _BIDI_WARNING_EMITTED = False
 _DEEP_TRANSLATOR_WARNING_EMITTED = _DEEP_TRANSLATOR_IMPORT_ERROR is not None
+_MOVIEPY_WARNING_EMITTED = False
 
 
 class _IdentityTranslator:
@@ -501,9 +533,15 @@ class TrendingVideoCreator:
     # Video rendering
     # ------------------------------------------------------------------
     def build_caption_clip(self, text: str, duration: float) -> TextClip:
+        _ensure_moviepy_available((TextClip, "TextClip"))
+
         normalized = self._normalize_persian_text(text)
+        if TextClip is None:  # pragma: no cover - defensive
+            raise RuntimeError("moviepy TextClip class is unavailable")
+
+        text_clip_cls = cast(Type[_TextClip], TextClip)
         return (
-            TextClip(
+            text_clip_cls(
                 normalized,
                 font=str(self.font_path),
                 fontsize=80,
@@ -524,16 +562,29 @@ class TrendingVideoCreator:
     ) -> Path:
         """Create a simple vertical video with the provided audio and caption."""
 
-        audio_clip = AudioFileClip(str(audio_path))
+        _ensure_moviepy_available(
+            (AudioFileClip, "AudioFileClip"),
+            (ColorClip, "ColorClip"),
+            (CompositeVideoClip, "CompositeVideoClip"),
+        )
+
+        if AudioFileClip is None or ColorClip is None or CompositeVideoClip is None:  # pragma: no cover - defensive
+            raise RuntimeError("moviepy components are unavailable")
+
+        audio_clip_cls = cast(Type[_AudioFileClip], AudioFileClip)
+        color_clip_cls = cast(Type[_ColorClip], ColorClip)
+        composite_clip_cls = cast(Type[_CompositeVideoClip], CompositeVideoClip)
+
+        audio_clip = audio_clip_cls(str(audio_path))
         duration = audio_clip.duration
 
-        background = ColorClip(
+        background = color_clip_cls(
             size=(self.width, self.height),
             color=self.background_color,
         ).set_duration(duration)
 
         caption = self.build_caption_clip(text=text, duration=duration)
-        video = CompositeVideoClip([background, caption]).set_audio(audio_clip)
+        video = composite_clip_cls([background, caption]).set_audio(audio_clip)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         video.write_videofile(  # type: ignore[no-untyped-call]
@@ -759,3 +810,28 @@ class TrendingVideoCreator:
         destination.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         return destination
 
+def _ensure_moviepy_available(*components: tuple[object, str]) -> None:
+    """Ensure moviepy (or patched stand-ins) are available before rendering."""
+
+    missing = [name for component, name in components if not callable(component)]
+    if not missing:
+        return
+
+    global _MOVIEPY_WARNING_EMITTED
+    if not _MOVIEPY_WARNING_EMITTED:
+        LOGGER.warning(
+            "moviepy is not installed – trending video rendering features are disabled."
+        )
+        _MOVIEPY_WARNING_EMITTED = True
+
+    hint = "Install it with `pip install moviepy`."
+    components_list = ", ".join(missing)
+    message = (
+        "moviepy is required to render trending videos. "
+        f"Missing components: {components_list}. {hint}"
+    )
+
+    if _MOVIEPY_IMPORT_ERROR is not None:
+        raise RuntimeError(message) from _MOVIEPY_IMPORT_ERROR
+
+    raise RuntimeError(message)

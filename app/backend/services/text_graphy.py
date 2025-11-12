@@ -8,7 +8,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Iterable, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 from urllib.parse import urlparse
 
 try:  # pragma: no cover - optional dependency guard
@@ -28,6 +28,17 @@ except Exception:  # pragma: no cover - graceful degradation if translator missi
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+_KNOWN_VIDEO_FORMAT_KEYS = {
+    "mp4",
+    "m4v",
+    "mov",
+    "webm",
+    "ogv",
+    "ogg",
+    "mkv",
+}
 
 
 class TextGraphyServiceError(RuntimeError):
@@ -489,19 +500,159 @@ class TextGraphyService:
 
     @staticmethod
     def _extract_sources(payload: dict) -> List[CoverrVideoSource]:
-        def iter_sources(data: dict) -> Iterable[CoverrVideoSource]:
-            for quality, sources in data.items():
-                if not isinstance(sources, dict):
-                    continue
-                for fmt, url in sources.items():
-                    if isinstance(url, str) and url:
-                        yield CoverrVideoSource(quality=str(quality), format=str(fmt), url=url)
+        sections: List[Any] = []
+        for key in ("video", "urls", "videoUrls"):
+            section = payload.get(key)
+            if section:
+                sections.append(section)
 
-        video_section = payload.get("video") or payload.get("urls") or payload.get("videoUrls") or {}
-        sources = list(iter_sources(video_section))
-        if not sources and isinstance(payload.get("source"), dict):
-            sources = list(iter_sources(payload["source"]))
-        return sources
+        source_section = payload.get("source")
+        if isinstance(source_section, dict):
+            sections.append(source_section)
+
+        sources: List[CoverrVideoSource] = []
+        for section in sections:
+            sources.extend(TextGraphyService._parse_coverr_sources(section))
+
+        deduped: List[CoverrVideoSource] = []
+        seen: set[tuple[str, str, str]] = set()
+        for source in sources:
+            fingerprint = (source.quality, source.format, source.url)
+            if fingerprint in seen:
+                continue
+            deduped.append(source)
+            seen.add(fingerprint)
+        return deduped
+
+    @staticmethod
+    def _parse_coverr_sources(
+        section: Any,
+        *,
+        default_quality: str = "",
+        default_format: str = "",
+    ) -> List[CoverrVideoSource]:
+        results: List[CoverrVideoSource] = []
+
+        if isinstance(section, dict):
+            for outer_key, inner in section.items():
+                key = str(outer_key) if outer_key is not None else ""
+                if isinstance(inner, str):
+                    results.append(
+                        TextGraphyService._build_source(
+                            quality=None if TextGraphyService._looks_like_format(key) else key,
+                            format=key if TextGraphyService._looks_like_format(key) else "",
+                            url=inner,
+                            default_quality=default_quality,
+                            default_format=default_format,
+                        )
+                    )
+                elif isinstance(inner, dict):
+                    if TextGraphyService._looks_like_format(key):
+                        fmt = key
+                        for quality_key, url in inner.items():
+                            if isinstance(url, str) and url:
+                                results.append(
+                                    TextGraphyService._build_source(
+                                        quality=str(quality_key),
+                                        format=fmt,
+                                        url=url,
+                                    )
+                                )
+                    else:
+                        quality = key or default_quality
+                        for fmt_key, url in inner.items():
+                            if isinstance(url, str) and url:
+                                results.append(
+                                    TextGraphyService._build_source(
+                                        quality=quality,
+                                        format=str(fmt_key),
+                                        url=url,
+                                    )
+                                )
+                elif isinstance(inner, list):
+                    if TextGraphyService._looks_like_format(key):
+                        fmt = key
+                        for item in inner:
+                            results.extend(
+                                TextGraphyService._parse_coverr_sources(
+                                    item,
+                                    default_quality=default_quality,
+                                    default_format=fmt,
+                                )
+                            )
+                    else:
+                        quality = key or default_quality
+                        for item in inner:
+                            results.extend(
+                                TextGraphyService._parse_coverr_sources(
+                                    item,
+                                    default_quality=quality,
+                                    default_format=default_format,
+                                )
+                            )
+        elif isinstance(section, list):
+            for item in section:
+                if isinstance(item, dict):
+                    url = item.get("url") or item.get("src")
+                    if not isinstance(url, str) or not url:
+                        continue
+                    quality_val = item.get("quality") or item.get("label") or default_quality
+                    format_val = item.get("format") or item.get("type") or default_format
+                    results.append(
+                        TextGraphyService._build_source(
+                            quality=str(quality_val) if quality_val is not None else "",
+                            format=str(format_val) if format_val is not None else "",
+                            url=url,
+                            default_quality=default_quality,
+                            default_format=default_format,
+                        )
+                    )
+                elif isinstance(item, str) and item:
+                    results.append(
+                        TextGraphyService._build_source(
+                            quality=default_quality,
+                            format=default_format,
+                            url=item,
+                        )
+                    )
+
+        return results
+
+    @staticmethod
+    def _build_source(
+        *,
+        quality: Optional[str],
+        format: Optional[str],
+        url: str,
+        default_quality: str = "",
+        default_format: str = "",
+    ) -> CoverrVideoSource:
+        quality_value = (quality or default_quality or "original").strip()
+        format_value = (format or default_format or "").strip()
+        if not format_value:
+            format_value = TextGraphyService._infer_format_from_url(url)
+        return CoverrVideoSource(
+            quality=quality_value or "original",
+            format=format_value or "mp4",
+            url=url,
+        )
+
+    @staticmethod
+    def _looks_like_format(value: str) -> bool:
+        normalized = (value or "").strip().lower()
+        if not normalized:
+            return False
+        return normalized in _KNOWN_VIDEO_FORMAT_KEYS or "/" in normalized
+
+    @staticmethod
+    def _infer_format_from_url(url: str) -> str:
+        parsed = urlparse(url)
+        path = parsed.path or ""
+        if "." in path:
+            ext = path.rsplit(".", 1)[-1].lower()
+            if ext:
+                return ext
+        return "mp4"
 
     def build_plan(
         self,

@@ -105,7 +105,7 @@
                             <td class="text-break">{{ token.endpoint_url or '—' }}</td>
                             <td>{{ token.created_at.strftime('%Y-%m-%d %H:%M') if token.created_at else '' }}</td>
                             <td class="actions">
-                                <form method="post" action="/settings/delete" onsubmit="return confirm('توکن حذف شود؟');">
+                                <form method="post" action="/settings/delete" data-confirm="توکن حذف شود؟">
                                     <input type="hidden" name="token_id" value="{{ token.id }}">
                                     <button type="submit" class="btn btn-small btn-danger">حذف</button>
                                 </form>

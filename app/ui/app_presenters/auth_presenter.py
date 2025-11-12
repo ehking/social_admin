@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.backend import auth, models
 from app.backend.services.data_access import AdminUserService, DatabaseServiceError
 
+from .helpers import is_ajax_request, json_error, json_success
+
 
 @dataclass(slots=True)
 class AuthPresenter:
@@ -50,6 +52,11 @@ class AuthPresenter:
                 extra={"username": username},
                 exc_info=exc,
             )
+            if is_ajax_request(request):
+                return json_error(
+                    "ورود به دلیل خطای پایگاه داده ممکن نیست. لطفاً مجدداً تلاش کنید.",
+                    status_code=500,
+                )
             return self.templates.TemplateResponse(
                 "login.html",
                 {
@@ -64,6 +71,8 @@ class AuthPresenter:
                 "Failed login attempt",
                 extra={"username": username, "ip": request.client.host if request.client else None},
             )
+            if is_ajax_request(request):
+                return json_error("نام کاربری یا رمز عبور نادرست است.", status_code=400)
             return self.templates.TemplateResponse(
                 "login.html",
                 {"request": request, "error": "نام کاربری یا رمز عبور نادرست است."},
@@ -75,13 +84,17 @@ class AuthPresenter:
             "User logged in",
             extra={"user_id": user.id, "username": username, "ip": request.client.host if request.client else None},
         )
+        if is_ajax_request(request):
+            return json_success("ورود با موفقیت انجام شد.", redirect="/")
         return RedirectResponse(url="/", status_code=302)
 
-    def logout(self, request: Request) -> RedirectResponse:
+    def logout(self, request: Request) -> RedirectResponse | object:
         """Clear the session for the current user."""
 
         user_id: Optional[int] = request.session.get("user_id")
         request.session.clear()
         if user_id:
             self.logger.info("User logged out", extra={"user_id": user_id})
+        if is_ajax_request(request):
+            return json_success("خروج با موفقیت انجام شد.", redirect="/login")
         return RedirectResponse(url="/login", status_code=302)

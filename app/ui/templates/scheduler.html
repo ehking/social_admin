@@ -10,7 +10,7 @@
             <p class="panel-description">یک حساب را انتخاب کنید و محتوا را تنظیم نمایید</p>
         </div>
     </header>
-    <form method="post" action="/scheduler" class="form-grid" data-ajax="true">
+    <form method="post" action="/scheduler" class="form-grid" data-ajax="true" data-ajax-silent="true">
         <div class="form-field">
             <label for="account_id">حساب <span class="required-marker" aria-hidden="true">*</span><span class="sr-only">فیلد اجباری</span></label>
             <select name="account_id" id="account_id" required>
@@ -78,7 +78,7 @@
                                     {% endif %}
                                 </td>
                                 <td class="actions">
-                                    <form method="post" action="/scheduler/delete" data-ajax="true" data-confirm="زمان‌بندی حذف شود؟">
+                                    <form method="post" action="/scheduler/delete" data-ajax="true" data-ajax-silent="true" data-confirm="زمان‌بندی حذف شود؟">
                                         <input type="hidden" name="post_id" value="{{ post.id }}">
                                         <button type="submit" class="btn btn-small btn-danger">حذف</button>
                                     </form>

@@ -68,6 +68,8 @@
             {% block content %}{% endblock %}
         </main>
     </div>
+    <div id="ajax-feedback" class="ajax-feedback" role="status" aria-live="polite" hidden></div>
+    <script src="{{ url_for('static', path='js/ajax.js') }}" defer></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

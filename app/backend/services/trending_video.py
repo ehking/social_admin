@@ -14,7 +14,13 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional
 
 import requests
-from bidi.algorithm import get_display
+try:  # pragma: no cover - import guard exercised in production
+    from bidi.algorithm import get_display as _bidi_get_display
+except ModuleNotFoundError as exc:  # pragma: no cover - import guard
+    _bidi_get_display = None
+    _BIDI_IMPORT_ERROR = exc
+else:  # pragma: no cover - import guard
+    _BIDI_IMPORT_ERROR = None
 from deep_translator import GoogleTranslator
 from moviepy.editor import (
     AudioFileClip,
@@ -49,7 +55,28 @@ if _ARABIC_RESHAPER_IMPORT_ERROR is not None:
         "arabic_reshaper is not installed – Persian captions may render incorrectly."
     )
 
+if _BIDI_IMPORT_ERROR is not None:
+    LOGGER.warning("python-bidi is not installed – Persian captions may render incorrectly.")
+
 _ARABIC_RESHAPER_WARNING_EMITTED = False
+_BIDI_WARNING_EMITTED = False
+
+
+def _apply_bidi(text: str) -> str:
+    """Apply basic bidi handling when python-bidi is available."""
+
+    global _BIDI_WARNING_EMITTED
+
+    if _bidi_get_display is None:
+        if not _BIDI_WARNING_EMITTED:
+            LOGGER.warning(
+                "python-bidi is unavailable; using fallback text normalization."
+            )
+            _BIDI_WARNING_EMITTED = True
+        return text
+
+    return _bidi_get_display(text)
+
 
 _CONCURRENCY_ENV_VAR = "TRENDING_PREVIEW_MAX_CONCURRENCY"
 _DEFAULT_MAX_CONCURRENCY = 3
@@ -425,11 +452,10 @@ class TrendingVideoCreator:
                     "arabic_reshaper is unavailable; using fallback text normalization."
                 )
                 _ARABIC_RESHAPER_WARNING_EMITTED = True
-            # ``get_display`` still provides basic bidi handling.
-            return get_display(text)
+            return _apply_bidi(text)
 
         reshaped = arabic_reshaper.reshape(text)
-        return get_display(reshaped)
+        return _apply_bidi(reshaped)
 
     def translate_to_persian(self, text: str) -> str:
         translated = self.translator.translate(text)

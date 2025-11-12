@@ -2,6 +2,9 @@ import asyncio
 import json
 from pathlib import Path
 
+from contextlib import contextmanager
+import typing
+
 import pytest
 import anyio
 from fastapi import FastAPI
@@ -9,18 +12,40 @@ from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 pytest.importorskip("httpx")
-from starlette.testclient import TestClient
+import httpx
+
+
+class _SyncASGIClient:
+    def __init__(self, app):
+        self._client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        )
+
+    def request(self, method: str, url: str, *args, **kwargs) -> httpx.Response:
+        return asyncio.run(self._client.request(method, url, *args, **kwargs))
+
+    def get(self, url: str, *args, **kwargs) -> httpx.Response:
+        return self.request("GET", url, *args, **kwargs)
+
+    def close(self) -> None:
+        asyncio.run(self._client.aclose())
 
 from app.ui.app_presenters.logs_presenter import LogsPresenter
 from app.ui.views.logs import create_router
 
 
-def _create_client(log_dir: Path) -> TestClient:
+@contextmanager
+def _create_client(log_dir: Path) -> typing.Iterator[_SyncASGIClient]:
     templates = Jinja2Templates(directory="app/ui/templates")
     presenter = LogsPresenter(templates, log_directory=log_dir)
     app = FastAPI()
     app.include_router(create_router(presenter))
-    return TestClient(app)
+    client = _SyncASGIClient(app)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 @pytest.fixture

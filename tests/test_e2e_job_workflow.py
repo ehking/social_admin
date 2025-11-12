@@ -1,3 +1,4 @@
+import asyncio
 import pathlib
 import sys
 from datetime import datetime, timedelta
@@ -6,7 +7,32 @@ import pytest
 
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
+import httpx
+
+
+class _SyncASGIClient:
+    def __init__(self, app):
+        self._client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        )
+
+    def request(self, method: str, *args, **kwargs) -> httpx.Response:
+        return asyncio.run(self._client.request(method, *args, **kwargs))
+
+    def post(self, url: str, *args, **kwargs) -> httpx.Response:
+        return self.request("POST", url, *args, **kwargs)
+
+    def get(self, url: str, *args, **kwargs) -> httpx.Response:
+        return self.request("GET", url, *args, **kwargs)
+
+    @property
+    def cookies(self) -> httpx.Cookies:
+        return self._client.cookies
+
+    def close(self) -> None:
+        asyncio.run(self._client.aclose())
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -52,15 +78,18 @@ def fixture_client(test_session):
         db.add(account)
         db.commit()
         db.refresh(account)
-    with TestClient(app) as client:
+    client = _SyncASGIClient(app)
+    try:
         yield client
+    finally:
+        client.close()
 
 
 def test_full_job_workflow(client, test_session):
     login_response = client.post(
         "/login",
         data={"username": "admin", "password": "admin123"},
-        allow_redirects=False,
+        follow_redirects=False,
     )
     assert login_response.status_code == 302
 
@@ -79,7 +108,7 @@ def test_full_job_workflow(client, test_session):
             "video_url": "https://videos.example.com/test.mp4",
             "scheduled_time": schedule_time.isoformat(timespec="minutes"),
         },
-        allow_redirects=False,
+        follow_redirects=False,
     )
 
     assert create_response.status_code == 302

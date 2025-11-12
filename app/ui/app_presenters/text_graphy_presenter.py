@@ -118,7 +118,7 @@ class TextGraphyPresenter:
             "token_hint": state.token_hint,
             "token_usage": state.token_usage,
         }
-        return self.templates.TemplateResponse("text_graphy.html", context)
+        return self.templates.TemplateResponse(request, "text_graphy.html", context)
 
     def create_text_graphy(
         self,

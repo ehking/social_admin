@@ -34,7 +34,7 @@ class AuthPresenter:
                 extra={"user_id": user_id},
             )
             return RedirectResponse(url="/", status_code=302)
-        return self.templates.TemplateResponse("login.html", {"request": request})
+        return self.templates.TemplateResponse(request, "login.html", {"request": request})
 
     async def login(self, request: Request, db: Session) -> RedirectResponse | object:
         """Handle login submissions and redirect appropriately."""
@@ -58,6 +58,7 @@ class AuthPresenter:
                     status_code=500,
                 )
             return self.templates.TemplateResponse(
+                request,
                 "login.html",
                 {
                     "request": request,
@@ -74,6 +75,7 @@ class AuthPresenter:
             if is_ajax_request(request):
                 return json_error("نام کاربری یا رمز عبور نادرست است.", status_code=400)
             return self.templates.TemplateResponse(
+                request,
                 "login.html",
                 {"request": request, "error": "نام کاربری یا رمز عبور نادرست است."},
                 status_code=400,

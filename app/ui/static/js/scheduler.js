@@ -131,64 +131,57 @@
     postsContainer.appendChild(wrapper);
   }
 
-  async function handleAjaxSubmit(event) {
-    const form = event.target;
-    if (!(form instanceof HTMLFormElement) || form.dataset.ajax !== 'true') {
-      return;
+  function matchesSchedulerForm(form) {
+    if (!(form instanceof HTMLFormElement)) {
+      return false;
     }
+    const action = form.getAttribute('action') || '';
+    return action.endsWith('/scheduler') || action.endsWith('/scheduler/delete');
+  }
 
-    event.preventDefault();
-
-    if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
-      return;
-    }
-
-    const submitButton = form.querySelector('button[type="submit"]');
-    if (submitButton) {
-      submitButton.disabled = true;
-    }
-
-    try {
-      const formData = new FormData(form);
-      const response = await fetch(form.action, {
-        method: (form.method || 'post').toUpperCase(),
-        body: formData,
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-      });
-
-      let payload = null;
-      try {
-        payload = await response.json();
-      } catch (error) {
-        showFeedback('error', 'پاسخ نامعتبر از سرور دریافت شد.');
+  document.addEventListener(
+    'ajax:success',
+    (event) => {
+      const form = event.target;
+      if (!matchesSchedulerForm(form)) {
         return;
       }
 
-      if (!response.ok || !payload || payload.success === false) {
-        const message = payload && payload.error ? payload.error : 'اجرای عملیات با خطا مواجه شد.';
-        const warning = payload && payload.warning ? payload.warning : undefined;
-        showFeedback('error', message, warning);
-      } else {
-        const warning = payload.warning ? payload.warning : undefined;
-        showFeedback('success', payload.message || 'عملیات با موفقیت انجام شد.', warning);
-        if (form.action.endsWith('/scheduler')) {
-          form.reset();
-        }
-      }
+      const detail = event.detail || {};
+      const payload = detail.payload || {};
 
-      if (payload && Array.isArray(payload.posts)) {
+      if (Array.isArray(payload.posts)) {
         renderPosts(payload.posts);
       }
-    } catch (error) {
-      showFeedback('error', 'ارتباط با سرور برقرار نشد.');
-    } finally {
-      if (submitButton) {
-        submitButton.disabled = false;
-      }
-    }
-  }
 
-  document.addEventListener('submit', handleAjaxSubmit, true);
+      const warning = payload.warning ? payload.warning : undefined;
+      const message = payload.message || 'عملیات با موفقیت انجام شد.';
+      showFeedback('success', message, warning);
+
+      if ((form.getAttribute('action') || '').endsWith('/scheduler')) {
+        form.reset();
+      }
+
+      detail.handled = true;
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'ajax:error',
+    (event) => {
+      const form = event.target;
+      if (!matchesSchedulerForm(form)) {
+        return;
+      }
+
+      const detail = event.detail || {};
+      const payload = detail.payload || {};
+      const warning = payload.warning ? payload.warning : undefined;
+      const message = detail.message || payload.error || 'اجرای عملیات با خطا مواجه شد.';
+      showFeedback('error', message, warning);
+      detail.handled = true;
+    },
+    true,
+  );
 })();

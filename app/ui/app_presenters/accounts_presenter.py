@@ -18,7 +18,7 @@ from app.backend.services.data_access import (
     SocialAccountService,
 )
 
-from .helpers import build_layout_context
+from .helpers import build_layout_context, is_ajax_request, json_error, json_success
 
 
 @dataclass(slots=True)
@@ -124,11 +124,17 @@ class AccountsPresenter:
                 extra={"user_id": user.id, "account_id": account_id},
             )
             accounts, load_error = self._load_accounts(db)
+            error_message = str(exc)
+            if is_ajax_request(request):
+                payload: dict[str, object] = {}
+                if load_error:
+                    payload["warning"] = load_error
+                return json_error(error_message, status_code=404, **payload)
             context = {
                 "request": request,
                 "user": user,
                 "accounts": accounts,
-                "error": str(exc),
+                "error": error_message,
                 "active_page": "accounts",
             }
             if load_error:
@@ -141,11 +147,17 @@ class AccountsPresenter:
                 exc_info=exc,
             )
             accounts, load_error = self._load_accounts(db)
+            error_message = "ذخیره حساب با خطا مواجه شد."
+            if is_ajax_request(request):
+                payload: dict[str, object] = {}
+                if load_error:
+                    payload["warning"] = load_error
+                return json_error(error_message, status_code=500, **payload)
             context = {
                 "request": request,
                 "user": user,
                 "accounts": accounts,
-                "error": "ذخیره حساب با خطا مواجه شد.",
+                "error": error_message,
                 "active_page": "accounts",
             }
             if load_error:
@@ -158,6 +170,9 @@ class AccountsPresenter:
             action,
             extra={"user_id": user.id, "account_id": account.id, "platform": account.platform},
         )
+        if is_ajax_request(request):
+            message = "حساب جدید با موفقیت ایجاد شد." if created else "اطلاعات حساب با موفقیت به‌روزرسانی شد."
+            return json_success(message, redirect="/accounts")
         return RedirectResponse(url="/accounts", status_code=302)
 
     def delete_account(
@@ -178,11 +193,17 @@ class AccountsPresenter:
                 exc_info=exc,
             )
             accounts, load_error = self._load_accounts(db)
+            error_message = "حذف حساب با خطا مواجه شد."
+            if is_ajax_request(request):
+                payload: dict[str, object] = {}
+                if load_error:
+                    payload["warning"] = load_error
+                return json_error(error_message, status_code=500, **payload)
             context = {
                 "request": request,
                 "user": user,
                 "accounts": accounts,
-                "error": "حذف حساب با خطا مواجه شد.",
+                "error": error_message,
                 "active_page": "accounts",
             }
             if load_error:
@@ -199,4 +220,8 @@ class AccountsPresenter:
                 "Attempted to delete non-existent account",
                 extra={"user_id": user.id, "account_id": account_id},
             )
+        if is_ajax_request(request):
+            if deleted:
+                return json_success("حساب با موفقیت حذف شد.", redirect="/accounts")
+            return json_error("حساب مورد نظر یافت نشد.", status_code=404)
         return RedirectResponse(url="/accounts", status_code=302)

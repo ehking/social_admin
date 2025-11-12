@@ -19,6 +19,8 @@ from app.backend.services.data_access import (
     SocialAccountService,
 )
 
+from .helpers import is_ajax_request
+
 @dataclass(slots=True)
 class SchedulerPresenter:
     """Prepare view models and handle scheduled post flows."""
@@ -30,8 +32,7 @@ class SchedulerPresenter:
     def _is_ajax(request: Request) -> bool:
         """Return True when the request originates from an AJAX call."""
 
-        requested_with = request.headers.get("x-requested-with", "").lower()
-        return requested_with == "xmlhttprequest"
+        return is_ajax_request(request)
 
     def _load_accounts(self, db: Session) -> tuple[list[models.SocialAccount], str | None]:
         service = SocialAccountService(db)

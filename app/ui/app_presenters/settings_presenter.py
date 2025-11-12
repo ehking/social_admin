@@ -15,6 +15,7 @@ from app.backend import models
 from app.backend.services import permissions as permissions_service
 from app.backend.services.data_access import DatabaseServiceError, ServiceTokenService
 
+from .helpers import is_ajax_request, json_error, json_success
 
 @dataclass(slots=True)
 class SettingsPresenter:
@@ -70,11 +71,17 @@ class SettingsPresenter:
                 exc_info=exc,
             )
             tokens, load_error = self._load_tokens(db)
+            error_message = "ذخیره توکن با خطا مواجه شد."
+            if is_ajax_request(request):
+                payload: dict[str, object] = {}
+                if load_error:
+                    payload["warning"] = load_error
+                return json_error(error_message, status_code=500, **payload)
             context = {
                 "request": request,
                 "user": user,
                 "tokens": tokens,
-                "error": "ذخیره توکن با خطا مواجه شد.",
+                "error": error_message,
                 "active_page": "settings",
             }
             if load_error:
@@ -87,6 +94,9 @@ class SettingsPresenter:
             action,
             extra={"user_id": user.id, "token_id": token.id, "key": key},
         )
+        if is_ajax_request(request):
+            message = "توکن با موفقیت ایجاد شد." if created else "توکن با موفقیت به‌روزرسانی شد."
+            return json_success(message, redirect="/settings")
         return RedirectResponse(url="/settings", status_code=302)
 
     def delete_token(
@@ -107,11 +117,17 @@ class SettingsPresenter:
                 exc_info=exc,
             )
             tokens, load_error = self._load_tokens(db)
+            error_message = "حذف توکن با خطا مواجه شد."
+            if is_ajax_request(request):
+                payload: dict[str, object] = {}
+                if load_error:
+                    payload["warning"] = load_error
+                return json_error(error_message, status_code=500, **payload)
             context = {
                 "request": request,
                 "user": user,
                 "tokens": tokens,
-                "error": "حذف توکن با خطا مواجه شد.",
+                "error": error_message,
                 "active_page": "settings",
             }
             if load_error:
@@ -128,19 +144,26 @@ class SettingsPresenter:
                 "Attempted to delete non-existent service token",
                 extra={"user_id": user.id, "token_id": token_id},
             )
+        if is_ajax_request(request):
+            if deleted:
+                return json_success("توکن با موفقیت حذف شد.", redirect="/settings")
+            return json_error("توکن مورد نظر یافت نشد.", status_code=404)
         return RedirectResponse(url="/settings", status_code=302)
 
     def update_permissions(
         self,
         *,
+        request: Request,
         db: Session,
         user: models.AdminUser,
         form_data: Mapping[str, object],
-    ) -> RedirectResponse:
+    ) -> RedirectResponse | object:
         updates = permissions_service.parse_permission_updates(form_data)
         permissions_service.apply_permission_updates(db, updates)
         self.logger.info(
             "Menu permissions updated",
             extra={"user_id": user.id},
         )
+        if is_ajax_request(request):
+            return json_success("مجوزهای دسترسی با موفقیت به‌روزرسانی شد.")
         return RedirectResponse(url="/settings", status_code=302)

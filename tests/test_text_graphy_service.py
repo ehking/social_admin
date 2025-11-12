@@ -135,6 +135,25 @@ def test_build_plan_translates_and_spreads_timeline():
     assert plan_with_diag.total_duration == plan.total_duration
 
 
+def test_service_initialises_without_optional_translator(monkeypatch):
+    payload = _build_payload()
+    http = DummyHTTPClient(payload)
+    monkeypatch.setattr("app.backend.services.text_graphy.GoogleTranslator", None)
+
+    service = TextGraphyService(http_client=http)
+
+    plan = service.build_plan(
+        coverr_reference="https://coverr.co/videos/autumn-sun",
+        lyrics_text="Line one\nLine two",
+        audio_url="https://audio.example/song.mp3",
+        audio_duration=120,
+    )
+
+    assert [line.translated for line in plan.lines] == ["Line one", "Line two"]
+    assert service._token_label == "مترجم خودکار فعال نیست"
+    assert service._token_hint is None
+
+
 def test_fetch_coverr_retries_on_connection_error():
     payload = _build_payload()
     http = FlakyHTTPClient(payload, failures=1)
